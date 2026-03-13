@@ -94,6 +94,7 @@ function AdminSidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: (
   const links = [
     { href: "/admin", label: "Dashboard" },
     { href: "/admin/inbox", label: "Inbox", badge: 8 },
+    { href: "/admin/citas", label: "Citas" },
     { href: "/admin/pedidos", label: "Pedidos" },
     { href: "/admin/clientes", label: "Clientes" },
     { href: "/admin/productos", label: "Productos" },
