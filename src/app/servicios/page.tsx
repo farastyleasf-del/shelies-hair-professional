@@ -260,6 +260,8 @@ type BData = { servicio: string; estilista: string; fecha: string | null; hora: 
 function BookingModal({ initial, onClose }: { initial?: string; onClose: () => void }) {
   const [step, setStep] = useState(1);
   const [d, setD] = useState<BData>({ servicio: initial || "", estilista: "", fecha: null, hora: null, nombre: "", telefono: "" });
+  const [submitting, setSubmitting] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
   const STEPS = 5;
 
   function fmtFecha(iso: string) {
@@ -268,17 +270,43 @@ function BookingModal({ initial, onClose }: { initial?: string; onClose: () => v
     return `${DIAS[dt.getDay()]} ${day} de ${MESES[mo - 1]}`;
   }
 
-  function waMsg() {
-    const slot = TIME_SLOTS.find((t) => t.value === d.hora);
-    return encodeURIComponent(
-      `Hola Shelie's! 🌸 Quiero reservar una cita:\n\n` +
-      `📋 Servicio: ${d.servicio}\n` +
-      `👤 Especialista: ${d.estilista}\n` +
-      `📅 Fecha: ${d.fecha ? fmtFecha(d.fecha) : ""}\n` +
-      `🕐 Hora: ${slot?.label || ""}\n` +
-      `👩 Nombre: ${d.nombre}\n` +
-      `📱 WhatsApp: ${d.telefono}`
-    );
+  async function handleConfirm() {
+    setSubmitting(true);
+    const cita = {
+      id: `cita-${Date.now()}`,
+      servicio: d.servicio,
+      estilista: d.estilista,
+      fecha: d.fecha,
+      hora: d.hora,
+      nombre: d.nombre,
+      telefono: d.telefono,
+      estado: "confirmada",
+      creadoEn: new Date().toISOString(),
+    };
+    // Save to localStorage
+    try {
+      const prev = JSON.parse(localStorage.getItem("shelies_citas") || "[]");
+      localStorage.setItem("shelies_citas", JSON.stringify([...prev, cita]));
+    } catch {}
+    // POST to API (best effort)
+    try {
+      await fetch("/api/appointments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          service_id: null,
+          stylist_id: null,
+          client_name: d.nombre,
+          client_phone: d.telefono,
+          date: d.fecha,
+          time_slot: d.hora,
+          status: "confirmada",
+          notes: `Servicio: ${d.servicio} | Especialista: ${d.estilista}`,
+        }),
+      });
+    } catch {}
+    setSubmitting(false);
+    setConfirmed(true);
   }
 
   function googleLink() {
@@ -443,7 +471,7 @@ function BookingModal({ initial, onClose }: { initial?: string; onClose: () => v
                   <label className={lbl}>Número WhatsApp</label>
                   <input value={d.telefono} onChange={(e) => setD((p) => ({ ...p, telefono: e.target.value }))}
                     placeholder="3XX XXX XXXX" type="tel" className={inp} />
-                  <p className="text-[11px] text-humo mt-1.5">Te confirmamos la cita por WhatsApp 💬</p>
+                  <p className="text-[11px] text-humo mt-1.5">Tu información es usada solo para la cita</p>
                 </div>
               </div>
             </div>
@@ -452,50 +480,83 @@ function BookingModal({ initial, onClose }: { initial?: string; onClose: () => v
           {/* STEP 5 — Confirmación */}
           {step === 5 && (
             <div>
-              <div className="text-center mb-6">
-                <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3"
-                  style={{ background: "linear-gradient(135deg,#D93879,#5E0B2B)" }}>
-                  <span className="text-3xl">🎉</span>
-                </div>
-                <h3 className="font-poppins font-bold text-xl text-carbon">¡Listo, {d.nombre.split(" ")[0]}!</h3>
-                <p className="text-sm text-humo mt-1 max-w-xs mx-auto">
-                  Confirma por WhatsApp para asegurar tu turno y guarda la cita en tu calendario.
-                </p>
-              </div>
-
-              {/* Resumen */}
-              <div className="bg-blush-light rounded-2xl p-5 mb-6 space-y-3">
-                {[
-                  { label: "Servicio",     value: d.servicio },
-                  { label: "Especialista", value: d.estilista },
-                  { label: "Fecha",        value: d.fecha ? fmtFecha(d.fecha) : "" },
-                  { label: "Hora",         value: TIME_SLOTS.find((t) => t.value === d.hora)?.label || "" },
-                ].map((r) => (
-                  <div key={r.label} className="flex items-start justify-between gap-3">
-                    <span className="text-xs font-semibold text-humo uppercase tracking-wider flex-shrink-0">{r.label}</span>
-                    <span className="text-sm font-medium text-carbon text-right">{r.value}</span>
+              {confirmed ? (
+                <div>
+                  <div className="text-center mb-6">
+                    <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4"
+                      style={{ background: "linear-gradient(135deg,#D93879,#5E0B2B)" }}>
+                      <span className="text-4xl">🎉</span>
+                    </div>
+                    <h3 className="font-poppins font-bold text-2xl text-carbon">¡Cita Confirmada!</h3>
+                    <p className="text-sm text-humo mt-2 max-w-xs mx-auto">
+                      Te esperamos, <strong>{d.nombre.split(" ")[0]}</strong>. Guarda la cita en tu calendario.
+                    </p>
                   </div>
-                ))}
-              </div>
-
-              <div className="space-y-3">
-                <a href={`https://wa.me/${WHATSAPP}?text=${waMsg()}`} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-3 w-full text-white font-poppins font-bold py-4 rounded-2xl text-sm shadow-lg hover:opacity-90 transition-opacity"
-                  style={{ background: "linear-gradient(135deg,#D93879,#5E0B2B)" }}>
-                  <span className="text-xl">📲</span>
-                  Confirmar por WhatsApp
-                </a>
-                <div className="grid grid-cols-2 gap-2">
-                  <a href={googleLink()} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-2 bg-white border-2 border-blush text-carbon font-semibold py-3 rounded-xl text-xs hover:border-fucsia transition-colors">
-                    <span>📅</span> Google Calendar
-                  </a>
-                  <button onClick={downloadICS}
-                    className="flex items-center justify-center gap-2 bg-white border-2 border-blush text-carbon font-semibold py-3 rounded-xl text-xs hover:border-fucsia transition-colors">
-                    <span>🍎</span> Apple / Outlook
+                  {/* Resumen compacto */}
+                  <div className="bg-blush-light rounded-2xl p-4 mb-5 space-y-2 text-sm">
+                    <p><span className="font-semibold text-humo">Servicio:</span> {d.servicio}</p>
+                    <p><span className="font-semibold text-humo">Especialista:</span> {d.estilista}</p>
+                    <p><span className="font-semibold text-humo">Fecha:</span> {d.fecha ? fmtFecha(d.fecha) : ""}</p>
+                    <p><span className="font-semibold text-humo">Hora:</span> {TIME_SLOTS.find(t => t.value === d.hora)?.label}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 mb-4">
+                    <a href={googleLink()} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-2 bg-white border-2 border-blush text-carbon font-semibold py-3 rounded-xl text-xs hover:border-fucsia transition-colors">
+                      <span>📅</span> Google Calendar
+                    </a>
+                    <button onClick={downloadICS}
+                      className="flex items-center justify-center gap-2 bg-white border-2 border-blush text-carbon font-semibold py-3 rounded-xl text-xs hover:border-fucsia transition-colors">
+                      <span>🍎</span> Apple / Outlook
+                    </button>
+                  </div>
+                  <button onClick={onClose}
+                    className="w-full py-3 rounded-2xl border-2 border-blush text-carbon font-semibold text-sm hover:border-fucsia transition-colors">
+                    Cerrar
                   </button>
                 </div>
-              </div>
+              ) : submitting ? (
+                <div className="flex items-center justify-center py-16">
+                  <div className="w-10 h-10 rounded-full border-4 border-blush border-t-fucsia animate-spin" />
+                </div>
+              ) : (
+                <div>
+                  <div className="text-center mb-6">
+                    <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3"
+                      style={{ background: "linear-gradient(135deg,#D93879,#5E0B2B)" }}>
+                      <span className="text-3xl">🎉</span>
+                    </div>
+                    <h3 className="font-poppins font-bold text-xl text-carbon">¡Listo, {d.nombre.split(" ")[0]}!</h3>
+                    <p className="text-sm text-humo mt-1 max-w-xs mx-auto">
+                      Revisa el resumen y confirma tu cita.
+                    </p>
+                  </div>
+
+                  {/* Resumen */}
+                  <div className="bg-blush-light rounded-2xl p-5 mb-6 space-y-3">
+                    {[
+                      { label: "Servicio",     value: d.servicio },
+                      { label: "Especialista", value: d.estilista },
+                      { label: "Fecha",        value: d.fecha ? fmtFecha(d.fecha) : "" },
+                      { label: "Hora",         value: TIME_SLOTS.find((t) => t.value === d.hora)?.label || "" },
+                    ].map((r) => (
+                      <div key={r.label} className="flex items-start justify-between gap-3">
+                        <span className="text-xs font-semibold text-humo uppercase tracking-wider flex-shrink-0">{r.label}</span>
+                        <span className="text-sm font-medium text-carbon text-right">{r.value}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={handleConfirm}
+                    disabled={submitting}
+                    className="w-full flex items-center justify-center gap-3 text-white font-poppins font-bold py-4 rounded-2xl text-sm shadow-lg hover:opacity-90 transition-opacity disabled:opacity-60"
+                    style={{ background: "linear-gradient(135deg,#D93879,#5E0B2B)" }}
+                  >
+                    <span className="text-xl">✅</span>
+                    Confirmar mi cita
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

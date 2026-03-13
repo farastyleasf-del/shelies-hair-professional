@@ -6,6 +6,7 @@ import { useAdminTheme } from "@/lib/admin-theme";
 const navItems = [
   { href: "/admin", label: "Dashboard", icon: "" },
   { href: "/admin/inbox", label: "Inbox", icon: "" },
+  { href: "/admin/citas", label: "Citas", icon: "📅" },
   { href: "/admin/pedidos", label: "Pedidos", icon: "" },
   { href: "/admin/clientes", label: "Clientes", icon: "" },
   { href: "/admin/catalogo", label: "Catálogo", icon: "" },
