@@ -1,0 +1,16 @@
+node_modules
+.next
+out
+.env*.local
+npm-debug.log*
+
+# Archivos fuente / assets originales (no necesarios en producción)
+"Información shelies"/
+Información shelies/
+shelies_servicios/
+Archivo.zip
+*.DS_Store
+.DS_Store
+
+# Videos grandes — usar CDN en producción
+public/videos/

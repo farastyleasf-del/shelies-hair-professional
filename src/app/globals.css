@@ -1,0 +1,88 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-blush-light text-carbon font-inter antialiased;
+  }
+  h1, h2, h3, h4 {
+    @apply font-poppins;
+  }
+}
+
+@layer components {
+  /* Botón principal — vino profundo */
+  .btn-vino {
+    @apply bg-vino text-white font-poppins font-semibold px-7 py-3 rounded-full
+           hover:bg-fucsia transition-all duration-200 text-sm tracking-wide
+           shadow-md hover:shadow-lg active:scale-[0.97];
+  }
+  /* Botón degradado fucsia→vino */
+  .btn-gradient {
+    @apply bg-cta-gradient text-white font-poppins font-semibold px-7 py-3 rounded-full
+           transition-all duration-200 text-sm tracking-wide shadow-md
+           hover:shadow-lg hover:opacity-90 active:scale-[0.97];
+  }
+  /* Botón outline fucsia */
+  .btn-outline {
+    @apply border-2 border-fucsia text-fucsia font-poppins font-semibold px-7 py-3
+           rounded-full hover:bg-fucsia hover:text-white transition-all duration-200
+           text-sm tracking-wide;
+  }
+  /* Botón outline vino */
+  .btn-outline-vino {
+    @apply border-2 border-vino text-vino font-poppins font-semibold px-7 py-3
+           rounded-full hover:bg-vino hover:text-white transition-all duration-200
+           text-sm tracking-wide;
+  }
+  /* Chips / filtros */
+  .chip {
+    @apply bg-blush text-vino text-xs font-medium px-3 py-1 rounded-full
+           border border-blush hover:border-fucsia hover:text-fucsia transition-colors;
+  }
+  .chip-active {
+    @apply bg-fucsia text-white text-xs font-medium px-3 py-1 rounded-full;
+  }
+  /* Badges */
+  .badge-dorado {
+    @apply bg-dorado/20 text-dorado text-[10px] font-bold uppercase px-2 py-0.5 rounded-full tracking-wider;
+  }
+  .badge-rosa {
+    @apply bg-blush text-vino text-[10px] font-bold uppercase px-2 py-0.5 rounded-full tracking-wider;
+  }
+  /* Card */
+  .card-premium {
+    @apply bg-white rounded-card shadow-card hover:shadow-card-hover
+           border border-blush/60 transition-all duration-300 overflow-hidden;
+  }
+  /* Precio destacado */
+  .precio {
+    @apply text-fucsia font-poppins font-bold;
+  }
+  /* Sección con fondo suave */
+  .section-blush {
+    @apply bg-blush-light;
+  }
+  .section-blush-mid {
+    @apply bg-blush/30;
+  }
+}
+
+/* Chat widget animations */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulse-ring {
+  0%   { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(1.4); opacity: 0; }
+}
+.animate-slide-up { animation: slideUp 0.3s ease-out; }
+.animate-pulse-ring { animation: pulse-ring 1.5s ease-out infinite; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-thumb { background: #FF70BA; border-radius: 3px; }

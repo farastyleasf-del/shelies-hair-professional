@@ -1,0 +1,53 @@
+
+> shelie-siempre-bellas@1.0.0 dev
+> next dev
+
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:3000
+
+ ✓ Starting...
+ ✓ Ready in 3s
+ ○ Compiling /servicios ...
+ ✓ Compiled /servicios in 6.9s (568 modules)
+ GET /servicios 200 in 7453ms
+ ✓ Compiled in 840ms (284 modules)
+ ○ Compiling / ...
+ ✓ Compiled / in 945ms (562 modules)
+ GET / 200 in 1332ms
+ ○ Compiling /tienda ...
+ ✓ Compiled /tienda in 899ms (568 modules)
+ GET /tienda 200 in 1237ms
+ GET /servicios 200 in 66ms
+ GET / 200 in 125ms
+ ⚠ The "images.domains" configuration is deprecated. Please use "images.remotePatterns" configuration instead.
+ GET / 200 in 309ms
+ ○ Compiling /tienda/[slug] ...
+ ✓ Compiled /tienda/[slug] in 2.8s (554 modules)
+ ○ Compiling /servicios ...
+ ✓ Compiled /servicios in 668ms (293 modules)
+ ○ Compiling /resultados ...
+ ✓ Compiled /tienda in 3s (579 modules)
+ ✓ Compiled in 2.5s (575 modules)
+ ✓ Compiled in 656ms (575 modules)
+ ✓ Compiled in 760ms (575 modules)
+ ✓ Compiled in 875ms (575 modules)
+ ✓ Compiled in 690ms (575 modules)
+ ✓ Compiled in 767ms (575 modules)
+ ✓ Compiled in 536ms (575 modules)
+ GET /tienda 200 in 857ms
+ ✓ Compiled in 3.7s (575 modules)
+ ✓ Compiled in 1322ms (575 modules)
+ ✓ Compiled in 380ms (575 modules)
+ ✓ Compiled in 497ms (575 modules)
+ ✓ Compiled in 358ms (575 modules)
+ ✓ Compiled in 781ms (575 modules)
+ ✓ Compiled in 1419ms (575 modules)
+ GET /tienda 200 in 1082ms
+ GET /tienda 200 in 666ms
+ ✓ Compiled in 3.6s (575 modules)
+ ✓ Compiled in 1674ms (292 modules)
+ ✓ Compiled in 715ms (292 modules)
+ ✓ Compiled in 5.7s (589 modules)
+ ✓ Compiled in 5.9s (292 modules)
+ GET /tienda/kit-romeo-julieta-detox 200 in 418ms
+[?25h
