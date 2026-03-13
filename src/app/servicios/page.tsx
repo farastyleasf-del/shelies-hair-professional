@@ -345,7 +345,7 @@ function BookingModal({ initial, onClose }: { initial?: string; onClose: () => v
   function canNext() {
     if (step === 1) return !!d.servicio;
     if (step === 2) return !!d.estilista;
-    if (step === 3) return !!d.fecha && !!d.hora;
+    if (step === 3) return !!d.fecha;
     if (step === 4) return d.nombre.trim().length > 1 && d.telefono.replace(/\D/g, "").length >= 7;
     return true;
   }
@@ -438,7 +438,7 @@ function BookingModal({ initial, onClose }: { initial?: string; onClose: () => v
               {d.fecha && (
                 <div>
                   <p className="text-xs font-semibold text-humo uppercase tracking-wider mb-3">
-                    {fmtFecha(d.fecha)} — Horarios disponibles
+                    {fmtFecha(d.fecha)} — {d.hora ? "Hora seleccionada ✓" : "Elige un horario"}
                   </p>
                   <div className="grid grid-cols-4 gap-2">
                     {TIME_SLOTS.map((slot) => (
@@ -570,7 +570,13 @@ function BookingModal({ initial, onClose }: { initial?: string; onClose: () => v
                 ← Atrás
               </button>
             )}
-            <button onClick={() => setStep((s) => s + 1)} disabled={!canNext()}
+            <button onClick={() => {
+                if (step === 3 && !d.hora) {
+                  alert("Selecciona un horario para continuar");
+                  return;
+                }
+                setStep((s) => s + 1);
+              }} disabled={!canNext()}
               className={`flex-1 py-3 rounded-2xl font-poppins font-bold text-sm transition-all ${
                 canNext() ? "text-white shadow-md hover:opacity-90" : "bg-blush/50 text-humo cursor-not-allowed"
               }`}

@@ -14,3 +14,4 @@ Archivo.zip
 
 # Videos grandes — usar CDN en producción
 public/videos/
+.vercel
