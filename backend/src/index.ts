@@ -7,6 +7,7 @@ import whatsappRouter    from "./routes/whatsapp";
 import adminRouter       from "./routes/adminUsers";
 import servicesRouter    from "./routes/services";
 import productsRouter    from "./routes/products";
+import paymentsRouter    from "./routes/payments";
 
 dotenv.config();
 
@@ -32,6 +33,7 @@ app.use("/api/whatsapp",            whatsappRouter);
 app.use("/api/admin",               adminRouter);
 app.use("/api/services",            servicesRouter);
 app.use("/api/products",            productsRouter);
+app.use("/api/payments",            paymentsRouter);
 
 /* ── 404 catch-all ── */
 app.use((_req, res) => {

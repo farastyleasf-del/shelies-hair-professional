@@ -1,5 +1,5 @@
-import { apiUrl } from "@/lib/api";
 "use client";
+import { apiUrl } from "@/lib/api";
 import { useState, useEffect, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";

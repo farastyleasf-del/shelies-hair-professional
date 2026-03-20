@@ -1,7 +1,8 @@
-import { apiUrl } from "@/lib/api";
 "use client";
+import { apiUrl } from "@/lib/api";
 import { useState, useRef, useEffect, useCallback } from "react";
 import {
+  conversations as allMockConversations,
   messagesDemo, adminCustomers, adminOrders,
   agents, templates, formatCOPAdmin, timeAgo, channelIcons, channelColors, statusColors,
 } from "@/lib/admin-data";
@@ -566,12 +567,7 @@ export default function InboxPage() {
   }, [selected, selectedConvIsWa, fetchWaMessages]);
 
   /* ── Merge: WA real primero, luego mock (otros canales) ── */
-  const { conversations: convData, messagesDemo: demoMsgs } = (() => {
-    // Importar conversaciones mock filtradas (sin whatsapp, ya tenemos las reales)
-    const { conversations: mockConvs } = require("@/lib/admin-data");
-    const filtered = (mockConvs as Conversation[]).filter((c) => c.channel !== "whatsapp");
-    return { conversations: filtered, messagesDemo: [] };
-  })();
+  const convData = (allMockConversations as Conversation[]).filter((c) => c.channel !== "whatsapp");
 
   const allConversations: Conversation[] = [
     ...waConversations,
