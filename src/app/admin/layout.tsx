@@ -102,6 +102,7 @@ function AdminSidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: (
     { href: "/admin/equipo", label: "Equipo" },
     { href: "/admin/reportes", label: "Reportes" },
     { href: "/admin/configuracion", label: "Config" },
+    { href: "/admin/perfil", label: "Perfil" },
   ];
 
   const visibleLinks = previewRole === "colaborador"
