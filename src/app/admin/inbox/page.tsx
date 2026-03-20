@@ -60,12 +60,12 @@ function waMsgToMessage(m: WaMsgRaw): Message {
 
 /* ── Column 1: Conversation List ── */
 function ConversationList({
-  conversations, selected, onSelect, filter, setFilter, channelFilter, setChannelFilter, waConnected,
+  conversations, selected, onSelect, filter, setFilter, channelFilter, setChannelFilter, waConnected, onSeedTest,
 }: {
   conversations: Conversation[]; selected: string | null; onSelect: (id: string) => void;
   filter: string; setFilter: (f: string) => void;
   channelFilter: string; setChannelFilter: (c: string) => void;
-  waConnected: boolean;
+  waConnected: boolean; onSeedTest: () => Promise<void>;
 }) {
   const t = useAdminTheme();
   const filtered = conversations
@@ -113,6 +113,15 @@ function ConversationList({
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Botón prueba — visible siempre para poder hacer demos */}
+      <div className={`px-4 py-2 border-b ${t.border}`}>
+        <button onClick={onSeedTest}
+          className="w-full text-[10px] py-1.5 rounded-lg border border-dashed transition-colors text-center hover:opacity-80"
+          style={{ borderColor: t.colors.border, color: t.colors.textFaint }}>
+          🧪 Simular mensajes WA de prueba
+        </button>
       </div>
 
       {/* Conversation items */}
@@ -581,6 +590,25 @@ export default function InboxPage() {
     setWaMessages([]);
   }
 
+  /* ── Seed test WA messages ── */
+  async function handleSeedTest() {
+    try {
+      const res = await fetch("/api/whatsapp/test?force=true", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ all: true }),
+      });
+      if (res.ok) {
+        await fetchWaConversations();
+      } else {
+        const data = await res.json() as { error?: string };
+        alert(data.error ?? "Error al simular mensajes");
+      }
+    } catch {
+      alert("Error de conexión al simular mensajes");
+    }
+  }
+
   /* ── Send handler ── */
   async function handleSend(text: string) {
     if (!selectedConv) return;
@@ -657,6 +685,7 @@ export default function InboxPage() {
             channelFilter={channelFilter}
             setChannelFilter={setChannelFilter}
             waConnected={waConnected}
+            onSeedTest={handleSeedTest}
           />
         </div>
 

@@ -100,6 +100,7 @@ function AdminSidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: (
     { href: "/admin/productos", label: "Productos" },
     { href: "/admin/servicios", label: "Servicios" },
     { href: "/admin/equipo", label: "Equipo" },
+    { href: "/admin/usuarios", label: "Usuarios" },
     { href: "/admin/reportes", label: "Reportes" },
     { href: "/admin/configuracion", label: "Config" },
     { href: "/admin/perfil", label: "Perfil" },
@@ -196,18 +197,47 @@ function AdminSidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: (
 }
 
 /* ── Login ── */
-function LoginForm({ onLogin }: { onLogin: () => void }) {
+function LoginForm({ onLogin }: { onLogin: (user?: { name: string; avatar: string; role: string }) => void }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (email === ADMIN_CREDENTIALS.email && password === ADMIN_CREDENTIALS.password) {
-      sessionStorage.setItem("admin_auth", "true");
-      onLogin();
-    } else {
+    setLoading(true);
+    setError("");
+    try {
+      // Intentar verificar por API (DB)
+      const res = await fetch("/api/admin/auth", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      if (res.ok) {
+        const data = await res.json() as { user: { name: string; avatar: string; role: string } };
+        sessionStorage.setItem("admin_auth", "true");
+        sessionStorage.setItem("admin_user", JSON.stringify(data.user));
+        localStorage.setItem("shelie_agent_name", data.user.name);
+        onLogin(data.user);
+        return;
+      }
+      // Fallback local si API no disponible
+      if (email === ADMIN_CREDENTIALS.email && password === ADMIN_CREDENTIALS.password) {
+        sessionStorage.setItem("admin_auth", "true");
+        onLogin({ name: "Shelie Admin", avatar: "💎", role: "admin" });
+        return;
+      }
       setError("Credenciales incorrectas");
+    } catch {
+      // Sin conexión: fallback hardcoded
+      if (email === ADMIN_CREDENTIALS.email && password === ADMIN_CREDENTIALS.password) {
+        sessionStorage.setItem("admin_auth", "true");
+        onLogin({ name: "Shelie Admin", avatar: "💎", role: "admin" });
+      } else {
+        setError("Credenciales incorrectas");
+      }
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -243,9 +273,13 @@ function LoginForm({ onLogin }: { onLogin: () => void }) {
           {error && <p className="text-red-600 text-sm bg-red-50 px-4 py-3 rounded-lg border border-red-200">{error}</p>}
           <button
             type="submit"
-            className="w-full bg-gradient-to-r from-[#8B3A4A] to-[#6B2A3A] text-white font-semibold rounded-lg py-3 text-sm hover:from-[#6B2A3A] hover:to-[#8B3A4A] transition-all shadow-lg hover:shadow-xl"
+            disabled={loading}
+            className="w-full bg-gradient-to-r from-[#8B3A4A] to-[#6B2A3A] text-white font-semibold rounded-lg py-3 text-sm hover:from-[#6B2A3A] hover:to-[#8B3A4A] transition-all shadow-lg hover:shadow-xl disabled:opacity-60 flex items-center justify-center gap-2"
           >
-            Iniciar Sesión
+            {loading ? (
+              <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : null}
+            {loading ? "Verificando..." : "Iniciar Sesión"}
           </button>
         </form>
         <p className="text-xs text-[#6B6B6B] text-center mt-6">
@@ -324,7 +358,12 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   }, []);
 
   if (checking) return <div className="min-h-screen bg-[#FAF7F4]" />;
-  if (!authed) return <LoginForm onLogin={() => setAuthed(true)} />;
+  if (!authed) return <LoginForm onLogin={(user) => {
+    if (user) {
+      try { localStorage.setItem("shelie_agent_name", user.name); } catch {}
+    }
+    setAuthed(true);
+  }} />;
 
   return (
     <AdminThemeProvider>
