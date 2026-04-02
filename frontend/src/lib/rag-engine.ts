@@ -1,5 +1,6 @@
-import { products, globalFAQ, demoOrders, formatCOP } from "./data";
+import { products, globalFAQ, formatCOP } from "./data";
 import { Product, ChatAction } from "./types";
+import { apiUrl } from "./api";
 
 /* ── Tipos para el Motor RAG ── */
 export interface RAGResponse {
@@ -11,7 +12,7 @@ export interface RAGResponse {
 }
 
 /* ── WhatsApp oficial ── */
-const WA_URL = "https://wa.me/573246828585";
+const WA_URL = "https://wa.me/573042741979";
 
 /* ── Base de Conocimiento — Servicios ── */
 const SERVICES_KB = [
@@ -200,7 +201,8 @@ export const ragEngine = {
         const isService     = has(KEYWORDS.service);
         const isRecommend   = has(KEYWORDS.recommendation);
         const isGreeting    = this.isGreeting(q);
-        const needsHandoff  = isPurchase || isSupport;
+        const isOrderCreate = /hacer pedido|crear pedido|quiero pedir|quiero comprar|como compro|como hago un pedido|hacer una compra/.test(q);
+        const needsHandoff  = isSupport;
 
         // 1. Saludo — primero para respuesta cálida inmediata
         if (isGreeting && !isTracking && !isRecommend && !isService) {
@@ -213,7 +215,12 @@ export const ragEngine = {
 
         // 2. Rastreo de pedidos
         if (isTracking || q.includes("ord-") || (q.includes("pedido") && this.hasContactInfo(q))) {
-            return this.handleOrderQuery(q);
+            return await this.handleOrderQuery(q);
+        }
+
+        // 2b. Crear pedido
+        if (isOrderCreate) {
+            return this.handleOrderCreate();
         }
 
         // 3. Producto específico (nombre o keyword única de producto)
@@ -251,14 +258,19 @@ export const ragEngine = {
             };
         }
 
-        // 8. Handoff directo (quiere comprar o hablar con alguien)
+        // 8. Handoff directo (quiere hablar con alguien)
         if (needsHandoff) {
             return {
                 content: "¡Claro! Te conecto con una asesora de Shelie's de inmediato. 📱",
-                intent: isPurchase ? "purchase" : "support",
+                intent: "support",
                 transferRequested: true,
                 actions: [{ type: "handoff", label: "Ir a WhatsApp 💬", payload: WA_URL }],
             };
+        }
+
+        // 8b. Comprar sin producto específico → guiar al catálogo
+        if (isPurchase) {
+            return this.handleOrderCreate();
         }
 
         // 9. Fallback amigable — ofrece las 3 rutas principales
@@ -427,33 +439,95 @@ export const ragEngine = {
         return { content, products: filtered.slice(0, 3), actions, intent: "recommendation", transferRequested: false };
     },
 
-    handleOrderQuery(q: string): RAGResponse {
+    async handleOrderQuery(q: string): Promise<RAGResponse> {
         const match =
             q.match(/ord-[\w-]+/i) ||
             q.match(/\b[\w@.]+@[\w.]+\b/) ||
             q.match(/\b3\d{9}\b/);
 
         if (match) {
-            const val = match[0].toLowerCase();
-            const order = demoOrders.find(
-                (o) =>
-                    o.id.toLowerCase() === val ||
-                    o.customer.email.toLowerCase() === val ||
-                    o.customer.phone === val
-            );
-            if (order) {
-                return {
-                    content: `Pedido: **${order.id}**\n\nEstatus: **${order.status.toUpperCase()}**\nFecha: ${new Date(order.createdAt).toLocaleDateString()}\nTotal: ${formatCOP(order.total)}\n\nTienes alguna otra duda?`,
-                    intent: "tracking",
-                    transferRequested: false,
-                };
+            try {
+                const res = await fetch(apiUrl(`/api/orders/track?q=${encodeURIComponent(match[0].toLowerCase())}`));
+                if (res.ok) {
+                    const o = await res.json();
+                    const statusLabel: Record<string, string> = {
+                        nuevo: "🆕 Nuevo — en espera de confirmación",
+                        procesando: "⚙️ En proceso — preparando tu pedido",
+                        enviado: "🚚 Enviado — en camino",
+                        entregado: "✅ Entregado",
+                        cancelado: "❌ Cancelado",
+                    };
+                    const status = statusLabel[o.status] ?? o.status;
+                    const lines = [
+                        `📦 **Pedido ${o.order_number}**`,
+                        "",
+                        `Estado: **${status}**`,
+                        `Cliente: ${o.client_name}`,
+                        `Total: **${formatCOP(Number(o.total))}**`,
+                    ];
+                    if (o.tracking_code) lines.push(`\nGuía de envío: \`${o.tracking_code}\``);
+                    if (o.payment_method) lines.push(`Método de pago: ${o.payment_method}`);
+                    return {
+                        content: lines.join("\n"),
+                        intent: "tracking",
+                        transferRequested: false,
+                        actions: [
+                            { type: "view_product", label: "Ver detalle completo 📋", payload: "/mi-pedido" },
+                        ],
+                    };
+                } else if (res.status === 404) {
+                    return {
+                        content: `No encontré ningún pedido con **${match[0]}**.\n\nVerifica que el número de orden, email o teléfono sean correctos, o escríbenos por WhatsApp.`,
+                        intent: "tracking",
+                        transferRequested: false,
+                        actions: [
+                            { type: "handoff", label: "Soporte por WhatsApp 📱", payload: WA_URL },
+                            { type: "view_product", label: "Ir a Mi Pedido", payload: "/mi-pedido" },
+                        ],
+                    };
+                }
+            } catch {
+                // si falla el fetch, caer al fallback
             }
+            return {
+                content: "No pude consultar el estado en este momento. Intenta en [Mi Pedido](/mi-pedido) o contáctanos por WhatsApp.",
+                intent: "tracking",
+                transferRequested: false,
+                actions: [
+                    { type: "handoff", label: "Soporte por WhatsApp 📱", payload: WA_URL },
+                ],
+            };
         }
 
         return {
-            content: "Para rastrear tu pedido necesito el **Numero de Orden** (ej: ORD-...), el correo o el telefono con que compraste.",
+            content: "Para rastrear tu pedido dime:\n\n• **Número de orden** (ej: ORD-1234)\n• Tu **correo electrónico**\n• O tu **número de celular**\n\n¿Cuál tienes a la mano?",
             intent: "tracking",
             transferRequested: false,
+            actions: [
+                { type: "view_product", label: "Ir a Mi Pedido 📦", payload: "/mi-pedido" },
+            ],
+        };
+    },
+
+    handleOrderCreate(): RAGResponse {
+        const top = products.slice(0, 4);
+        const lines = [
+            "¡Perfecto! Aquí tienes nuestros productos más populares:",
+            "",
+            ...top.map((p) => `• **${p.name}** — ${formatCOP(p.price)}`),
+            "",
+            "Puedes agregarlos al carrito desde aquí o explorar todo el catálogo. ¿Cuál te interesa?",
+        ];
+        return {
+            content: lines.join("\n"),
+            products: top,
+            intent: "purchase",
+            transferRequested: false,
+            actions: [
+                { type: "add_to_cart", label: `🛒 Agregar ${top[0].name}`, payload: top[0].id },
+                { type: "view_product", label: "Ver catálogo completo", payload: "/" },
+                { type: "view_product", label: "Ir al carrito 🛒", payload: "/carrito" },
+            ],
         };
     },
 

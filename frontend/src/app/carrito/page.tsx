@@ -2,7 +2,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useCart } from "@/lib/cart-context";
-import { formatCOP, promos } from "@/lib/data";
+import { formatCOP } from "@/lib/data";
 import { useState } from "react";
 
 export default function CarritoPage() {
@@ -11,13 +11,7 @@ export default function CarritoPage() {
   const [promoError, setPromoError] = useState("");
 
   function handleApplyPromo() {
-    const found = promos.find((p) => p.code.toLowerCase() === promoInput.trim().toLowerCase() && p.active);
-    if (found) {
-      applyPromo(found.code, found.discountPct);
-      setPromoError("");
-    } else {
-      setPromoError("Cupón no válido o expirado");
-    }
+    setPromoError("Cupón no válido o expirado");
   }
 
   if (count === 0) {

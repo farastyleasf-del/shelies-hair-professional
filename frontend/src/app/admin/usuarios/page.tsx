@@ -1,5 +1,5 @@
 "use client";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, authedFetch } from "@/lib/api";
 import { useState, useEffect, useCallback } from "react";
 import { useAdminTheme } from "@/lib/admin-theme";
 
@@ -202,7 +202,7 @@ export default function UsuariosPage() {
 
   const fetchUsers = useCallback(async () => {
     try {
-      const res = await fetch(apiUrl("/api/admin/users"));
+      const res = await authedFetch(apiUrl("/api/admin/users"));
       const data = await res.json() as AdminUser[];
       setUsers(Array.isArray(data) ? data : []);
     } catch {}
@@ -225,7 +225,7 @@ export default function UsuariosPage() {
           method: "PATCH", headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         })
-      : await fetch(apiUrl("/api/admin/users"), {
+      : await authedFetch(apiUrl("/api/admin/users"), {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...payload, email: data.email, password: data.password }),
         });

@@ -8,8 +8,8 @@ export const metadata = {
 const LAST_UPDATE = "28 de febrero de 2026";
 const COMPANY = "Shelie's Hair Professional";
 const EMAIL = "sheilys16@gmail.com";
-const WA1 = "573246828585";
-const WA2 = "573197933287";
+const WA1 = "573042741979";
+const WA2 = "573246828585";
 
 export default function PoliticaPrivacidadPage() {
   return (
@@ -37,10 +37,10 @@ export default function PoliticaPrivacidadPage() {
             <li><strong>Correo electrónico:</strong> <a href={`mailto:${EMAIL}`} className="text-vino hover:underline">{EMAIL}</a></li>
             <li><strong>WhatsApp:</strong>{" "}
               <a href={`https://wa.me/${WA1}`} target="_blank" rel="noopener noreferrer" className="text-vino hover:underline">
-                324 682 8585
+                304 274 1979
               </a>{" / "}
               <a href={`https://wa.me/${WA2}`} target="_blank" rel="noopener noreferrer" className="text-vino hover:underline">
-                319 793 3287
+                324 682 8585
               </a>
             </li>
             <li><strong>Instagram:</strong>{" "}
@@ -227,7 +227,7 @@ export default function PoliticaPrivacidadPage() {
             <li>
               <strong>WhatsApp:</strong>{" "}
               <a href={`https://wa.me/${WA1}`} target="_blank" rel="noopener noreferrer" className="text-vino hover:underline">
-                324 682 8585
+                304 274 1979
               </a>
             </li>
             <li>

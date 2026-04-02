@@ -1,7 +1,14 @@
 node_modules
 .next
 out
+# Variables de entorno — nunca en git
+.env
+.env.*
 .env*.local
+backend/.env
+frontend/.env
+frontend/.env.*
+frontend/.env*.local
 npm-debug.log*
 
 # Archivos fuente / assets originales (no necesarios en producción)

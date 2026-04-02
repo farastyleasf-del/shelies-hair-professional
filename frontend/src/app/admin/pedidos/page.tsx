@@ -1,9 +1,10 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { apiUrl, authedFetch } from "@/lib/api";
 import {
-  adminOrders, formatCOPAdmin, channelIcons, channelColors, statusColors, timeAgo,
+  formatCOPAdmin, channelIcons, channelColors, statusColors, timeAgo,
 } from "@/lib/admin-data";
-import type { AdminOrder, OrderStatus } from "@/lib/admin-types";
+import type { AdminOrder, OrderStatus, PaymentMethod, Channel } from "@/lib/admin-types";
 import { useAdminTheme } from "@/lib/admin-theme";
 
 const statusFlow: OrderStatus[] = ["nuevo", "pagado", "empacado", "enviado", "entregado"];
@@ -14,6 +15,57 @@ const statusEmoji: Record<string, string> = {
   nuevo: "🆕", pagado: "💳", empacado: "📦", enviado: "🚚", entregado: "✅",
   devuelto: "↩️", cancelado: "❌", incidencia: "⚠️",
 };
+
+/* ── DB row → AdminOrder ── */
+interface DbOrder {
+  id: number;
+  order_number: string;
+  client_name: string;
+  client_phone: string;
+  client_email: string;
+  client_address: string;
+  items: Array<{ id?: string; name?: string; title?: string; quantity?: number; qty?: number; unit_price?: number; price?: number }>;
+  subtotal: string | number;
+  discount: string | number;
+  total: string | number;
+  status: string;
+  payment_method: string;
+  payment_ref?: string;
+  tracking_code?: string;
+  notes?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+function dbToAdminOrder(row: DbOrder): AdminOrder {
+  const items = Array.isArray(row.items) ? row.items : [];
+  return {
+    id: row.order_number || String(row.id),
+    customerId: row.client_phone || String(row.id),
+    customerName: row.client_name || "Cliente",
+    status: (row.status as OrderStatus) || "nuevo",
+    items: items.map((i) => ({
+      productId: i.id || "",
+      name: i.name || i.title || "Producto",
+      qty: i.quantity || i.qty || 1,
+      price: i.unit_price || i.price || 0,
+    })),
+    subtotal: Number(row.subtotal) || 0,
+    discount: Number(row.discount) || 0,
+    shipping: 0,
+    total: Number(row.total) || 0,
+    paymentMethod: (row.payment_method as PaymentMethod) || "card",
+    paymentRef: row.payment_ref || undefined,
+    trackingCode: row.tracking_code || undefined,
+    address: row.client_address || "",
+    city: "",
+    channel: undefined as Channel | undefined,
+    notes: row.notes ? [row.notes] : [],
+    timestamps: {
+      created: row.created_at,
+    },
+  };
+}
 
 function OrderCard({ order, onSelect }: { order: AdminOrder; onSelect: () => void }) {
   const t = useAdminTheme();
@@ -36,11 +88,6 @@ function OrderCard({ order, onSelect }: { order: AdminOrder; onSelect: () => voi
         <span className="text-xs text-dorado font-medium">{formatCOPAdmin(order.total)}</span>
         <span className={`text-[10px] ${t.textFaint}`}>{timeAgo(order.timestamps.created)}</span>
       </div>
-      {order.incident && (
-        <div className="mt-2 bg-red-500/10 border border-red-500/20 rounded-lg px-2 py-1">
-          <p className="text-[10px] text-red-400 truncate">⚠️ {order.incident.description}</p>
-        </div>
-      )}
       {order.trackingCode && (
         <div className={`mt-1 text-[10px] ${t.textFaint}`}>🔗 {order.trackingCode}</div>
       )}
@@ -48,14 +95,29 @@ function OrderCard({ order, onSelect }: { order: AdminOrder; onSelect: () => voi
   );
 }
 
-function OrderDetail({ order, onClose }: { order: AdminOrder; onClose: () => void }) {
+function OrderDetail({
+  order, onClose, onStatusChange,
+}: {
+  order: AdminOrder;
+  onClose: () => void;
+  onStatusChange: (id: string, status: OrderStatus) => Promise<void>;
+}) {
   const t = useAdminTheme();
+  const [updating, setUpdating] = useState(false);
   const stages = ["created", "paid", "packed", "shipped", "delivered"] as const;
   const stageLabels = ["Creado", "Pagado", "Empacado", "Enviado", "Entregado"];
   const paymentLabels: Record<string, string> = {
     card: "💳 Tarjeta", pse: "🏦 PSE", transfer: "🏦 Transferencia",
     cod: "💵 Contra entrega", nequi: "📱 Nequi", daviplata: "📱 Daviplata",
+    mercadopago: "💳 MercadoPago", whatsapp: "💬 WhatsApp",
   };
+
+  async function advance(newStatus: OrderStatus) {
+    setUpdating(true);
+    await onStatusChange(order.id, newStatus);
+    setUpdating(false);
+    onClose();
+  }
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -89,9 +151,6 @@ function OrderDetail({ order, onClose }: { order: AdminOrder; onClose: () => voi
                     </div>
                     <p className={`text-[10px] ${active ? t.textMuted : t.textFaint}`}>{stageLabels[i]}</p>
                     {ts && <p className={`text-[9px] ${t.textFaint}`}>{new Date(ts).toLocaleDateString("es-CO")}</p>}
-                    {i < stages.length - 1 && (
-                      <div className={`absolute w-full h-0.5 ${active ? "bg-green-500/30" : t.border}`} />
-                    )}
                   </div>
                 );
               })}
@@ -103,7 +162,6 @@ function OrderDetail({ order, onClose }: { order: AdminOrder; onClose: () => voi
             <div className={`${t.bgCard} rounded-xl p-4 space-y-2`}>
               <p className={`text-[11px] ${t.textFaint} uppercase tracking-wider`}>👤 Cliente</p>
               <p className={`text-sm font-medium ${t.text}`}>{order.customerName}</p>
-              <p className={`text-xs ${t.textMuted}`}>{order.city}</p>
               <p className={`text-xs ${t.textMuted}`}>{order.address}</p>
             </div>
             <div className={`${t.bgCard} rounded-xl p-4 space-y-2`}>
@@ -119,8 +177,8 @@ function OrderDetail({ order, onClose }: { order: AdminOrder; onClose: () => voi
           {/* Items */}
           <div className={`${t.bgCard} rounded-xl p-4 mb-6`}>
             <p className={`text-[11px] ${t.textFaint} uppercase tracking-wider mb-3`}>📋 Productos</p>
-            {order.items.map((item) => (
-              <div key={item.productId} className={`flex items-center justify-between py-2 border-b ${t.border} last:border-0`}>
+            {order.items.map((item, idx) => (
+              <div key={idx} className={`flex items-center justify-between py-2 border-b ${t.border} last:border-0`}>
                 <div>
                   <p className={`text-sm ${t.text}`}>{item.name}</p>
                   <p className={`text-[10px] ${t.textFaint}`}>× {item.qty}</p>
@@ -129,17 +187,11 @@ function OrderDetail({ order, onClose }: { order: AdminOrder; onClose: () => voi
               </div>
             ))}
             <div className={`mt-3 pt-3 border-t ${t.borderHover} space-y-1`}>
-              <div className={`flex justify-between text-xs ${t.textMuted}`}>
-                <span>Subtotal</span><span>{formatCOPAdmin(order.subtotal)}</span>
-              </div>
               {order.discount > 0 && (
                 <div className="flex justify-between text-xs text-green-400">
                   <span>Descuento</span><span>-{formatCOPAdmin(order.discount)}</span>
                 </div>
               )}
-              <div className={`flex justify-between text-xs ${t.textMuted}`}>
-                <span>Envío</span><span>{order.shipping === 0 ? "Gratis" : formatCOPAdmin(order.shipping)}</span>
-              </div>
               <div className="flex justify-between text-sm font-bold text-dorado pt-1">
                 <span>Total</span><span>{formatCOPAdmin(order.total)}</span>
               </div>
@@ -147,45 +199,39 @@ function OrderDetail({ order, onClose }: { order: AdminOrder; onClose: () => voi
           </div>
 
           {/* Notes */}
-          {(order.notes.length > 0 || order.incident || order.returnReason) && (
-            <div className={`${t.bgCard} rounded-xl p-4 space-y-2`}>
+          {order.notes.length > 0 && (
+            <div className={`${t.bgCard} rounded-xl p-4 mb-6 space-y-2`}>
               <p className={`text-[11px] ${t.textFaint} uppercase tracking-wider`}>📝 Notas</p>
               {order.notes.map((n, i) => (
                 <p key={i} className={`text-xs ${t.textMuted}`}>• {n}</p>
               ))}
-              {order.incident && (
-                <div className="bg-red-500/10 rounded-lg p-2 mt-2">
-                  <p className="text-xs text-red-400">⚠️ Incidencia ({order.incident.type}): {order.incident.description}</p>
-                </div>
-              )}
-              {order.returnReason && (
-                <div className="bg-amber-500/10 rounded-lg p-2 mt-2">
-                  <p className="text-xs text-amber-400">↩️ Devolución: {order.returnReason}</p>
-                </div>
-              )}
             </div>
           )}
 
           {/* Actions */}
-          <div className="flex gap-2 mt-6">
+          <div className="flex gap-2">
             {order.status === "nuevo" && (
-              <button className="flex-1 bg-emerald-500/20 text-emerald-400 py-2.5 rounded-xl text-sm font-medium hover:bg-emerald-500/30 transition-colors">
+              <button disabled={updating} onClick={() => advance("pagado")}
+                className="flex-1 bg-emerald-500/20 text-emerald-400 py-2.5 rounded-xl text-sm font-medium hover:bg-emerald-500/30 transition-colors disabled:opacity-50">
                 ✓ Marcar como Pagado
               </button>
             )}
             {order.status === "pagado" && (
-              <button className="flex-1 bg-amber-500/20 text-amber-400 py-2.5 rounded-xl text-sm font-medium hover:bg-amber-500/30 transition-colors">
+              <button disabled={updating} onClick={() => advance("empacado")}
+                className="flex-1 bg-amber-500/20 text-amber-400 py-2.5 rounded-xl text-sm font-medium hover:bg-amber-500/30 transition-colors disabled:opacity-50">
                 📦 Marcar como Empacado
               </button>
             )}
             {order.status === "empacado" && (
-              <button className="flex-1 bg-sky-500/20 text-sky-400 py-2.5 rounded-xl text-sm font-medium hover:bg-sky-500/30 transition-colors">
+              <button disabled={updating} onClick={() => advance("enviado")}
+                className="flex-1 bg-sky-500/20 text-sky-400 py-2.5 rounded-xl text-sm font-medium hover:bg-sky-500/30 transition-colors disabled:opacity-50">
                 🚚 Marcar como Enviado
               </button>
             )}
-            {order.conversationId && (
-              <button className={`px-4 py-2.5 ${t.mode === "dark" ? "bg-white/5 text-white/60 hover:bg-white/10" : "bg-gray-100 text-gray-600 hover:bg-gray-200"} rounded-xl text-sm transition-colors`}>
-                💬 Ver conversación
+            {order.status === "enviado" && (
+              <button disabled={updating} onClick={() => advance("entregado")}
+                className="flex-1 bg-green-500/20 text-green-400 py-2.5 rounded-xl text-sm font-medium hover:bg-green-500/30 transition-colors disabled:opacity-50">
+                ✅ Marcar como Entregado
               </button>
             )}
           </div>
@@ -198,7 +244,41 @@ function OrderDetail({ order, onClose }: { order: AdminOrder; onClose: () => voi
 export default function PedidosPage() {
   const t = useAdminTheme();
   const [view, setView] = useState<"kanban" | "table">("kanban");
+  const [orders, setOrders] = useState<AdminOrder[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<AdminOrder | null>(null);
+
+  const fetchOrders = useCallback(async () => {
+    try {
+      const res = await authedFetch(apiUrl("/api/orders"));
+      if (!res.ok) return;
+      const rows = await res.json() as DbOrder[];
+      setOrders(rows.map(dbToAdminOrder));
+    } catch {
+      // fallback: empty
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchOrders(); }, [fetchOrders]);
+
+  async function handleStatusChange(orderId: string, newStatus: OrderStatus) {
+    try {
+      const res = await authedFetch(apiUrl(`/api/orders/${orderId}`), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (res.ok) {
+        setOrders((prev) =>
+          prev.map((o) => o.id === orderId ? { ...o, status: newStatus } : o)
+        );
+      }
+    } catch {
+      // silently fail
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -206,9 +286,15 @@ export default function PedidosPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className={`text-2xl font-poppins font-bold ${t.text}`}>📦 Pedidos</h1>
-          <p className={`${t.textMuted} text-sm mt-1`}>{adminOrders.length} pedidos totales</p>
+          <p className={`${t.textMuted} text-sm mt-1`}>
+            {loading ? "Cargando..." : `${orders.length} pedidos totales`}
+          </p>
         </div>
         <div className="flex gap-2">
+          <button onClick={fetchOrders}
+            className={`px-3 py-2 rounded-xl text-sm ${t.mode === "dark" ? "bg-white/5 text-white/60 hover:bg-white/10" : "bg-gray-100 text-gray-600 hover:bg-gray-200"} transition-colors`}>
+            ↺ Actualizar
+          </button>
           <button onClick={() => setView("kanban")}
             className={`px-4 py-2 rounded-xl text-sm ${view === "kanban" ? `${t.accent} text-white` : `${t.mode === "dark" ? "bg-white/5" : "bg-gray-100"} ${t.textMuted}`}`}>
             Kanban
@@ -220,23 +306,31 @@ export default function PedidosPage() {
         </div>
       </div>
 
+      {/* Empty state */}
+      {!loading && orders.length === 0 && (
+        <div className={`${t.bgCard} border ${t.border} rounded-2xl p-16 text-center`}>
+          <p className="text-5xl mb-4">📦</p>
+          <p className={`${t.textMuted} text-sm`}>No hay pedidos aún. Los pedidos de la tienda y del Inbox aparecerán aquí.</p>
+        </div>
+      )}
+
       {/* Kanban View */}
-      {view === "kanban" && (
+      {!loading && orders.length > 0 && view === "kanban" && (
         <div className="flex gap-3 overflow-x-auto pb-4">
           {allStatuses.map((status) => {
-            const orders = adminOrders.filter((o) => o.status === status);
+            const cols = orders.filter((o) => o.status === status);
             return (
               <div key={status} className="min-w-[260px] flex-shrink-0">
-                <div className={`flex items-center gap-2 mb-3 px-2`}>
+                <div className="flex items-center gap-2 mb-3 px-2">
                   <span>{statusEmoji[status]}</span>
                   <span className={`text-sm font-medium capitalize ${t.text}`}>{status}</span>
-                  <span className={`${t.mode === "dark" ? "bg-white/10 text-white/40" : "bg-gray-200 text-gray-500"} text-[10px] px-2 py-0.5 rounded-full`}>{orders.length}</span>
+                  <span className={`${t.mode === "dark" ? "bg-white/10 text-white/40" : "bg-gray-200 text-gray-500"} text-[10px] px-2 py-0.5 rounded-full`}>{cols.length}</span>
                 </div>
                 <div className="space-y-2">
-                  {orders.map((order) => (
+                  {cols.map((order) => (
                     <OrderCard key={order.id} order={order} onSelect={() => setSelectedOrder(order)} />
                   ))}
-                  {orders.length === 0 && (
+                  {cols.length === 0 && (
                     <div className={`${t.mode === "dark" ? "bg-white/[0.02] border-white/5" : "bg-gray-50 border-gray-200"} border border-dashed rounded-xl p-6 text-center`}>
                       <p className={`${t.textFaint} text-xs`}>Sin pedidos</p>
                     </div>
@@ -249,22 +343,21 @@ export default function PedidosPage() {
       )}
 
       {/* Table View */}
-      {view === "table" && (
+      {!loading && orders.length > 0 && view === "table" && (
         <div className={`${t.bgCard} border ${t.border} rounded-2xl overflow-hidden`}>
           <table className="w-full text-sm">
             <thead>
               <tr className={`${t.textFaint} text-[11px] uppercase tracking-wider ${t.bgDeep}`}>
-                <th className="text-left p-4">ID</th>
+                <th className="text-left p-4">Pedido</th>
                 <th className="text-left p-4">Cliente</th>
                 <th className="text-left p-4">Estado</th>
-                <th className="text-left p-4">Canal</th>
                 <th className="text-left p-4">Pago</th>
                 <th className="text-right p-4">Total</th>
                 <th className="text-right p-4">Fecha</th>
               </tr>
             </thead>
             <tbody>
-              {adminOrders.map((o) => (
+              {orders.map((o) => (
                 <tr key={o.id} onClick={() => setSelectedOrder(o)}
                   className={`border-t ${t.border} ${t.tableRowHover} cursor-pointer transition-colors`}>
                   <td className={`p-4 font-mono text-xs ${t.textMuted}`}>{o.id}</td>
@@ -273,13 +366,6 @@ export default function PedidosPage() {
                     <span className={`text-xs px-2 py-1 rounded-lg ${statusColors[o.status]}`}>
                       {statusEmoji[o.status]} {o.status}
                     </span>
-                  </td>
-                  <td className="p-4">
-                    {o.channel ? (
-                      <span className={`text-xs px-2 py-1 rounded ${channelColors[o.channel]}`}>
-                        {channelIcons[o.channel]} {o.channel}
-                      </span>
-                    ) : "—"}
                   </td>
                   <td className={`p-4 text-xs ${t.textMuted} capitalize`}>{o.paymentMethod}</td>
                   <td className="p-4 text-right text-dorado font-medium">{formatCOPAdmin(o.total)}</td>
@@ -293,7 +379,11 @@ export default function PedidosPage() {
 
       {/* Order Detail Modal */}
       {selectedOrder && (
-        <OrderDetail order={selectedOrder} onClose={() => setSelectedOrder(null)} />
+        <OrderDetail
+          order={selectedOrder}
+          onClose={() => setSelectedOrder(null)}
+          onStatusChange={handleStatusChange}
+        />
       )}
     </div>
   );

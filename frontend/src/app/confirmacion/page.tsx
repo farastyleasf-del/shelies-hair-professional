@@ -26,12 +26,14 @@ function ConfirmacionContent() {
   const status    = params.get("status");
   const orderId   = params.get("order");
   const paymentId = params.get("payment_id");
+  const type      = params.get("type");   // "cita" | null
+  const isCita    = type === "cita";
   const { clear } = useCart();
 
-  // Limpiar carrito solo si el pago fue aprobado
+  // Limpiar carrito solo si el pago fue aprobado y no es una cita
   useEffect(() => {
-    if (status === "approved") clear();
-  }, [status, clear]);
+    if (status === "approved" && !isCita) clear();
+  }, [status, isCita, clear]);
 
   if (status === "approved") {
     return (
@@ -41,13 +43,22 @@ function ConfirmacionContent() {
             <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
           </svg>
         </div>
-        <h1 className="font-poppins font-bold text-3xl mb-2 text-green-700">¡Pago exitoso!</h1>
-        <p className="text-humo mb-6">Tu pedido ha sido confirmado y está en proceso.</p>
+        {isCita ? (
+          <>
+            <h1 className="font-poppins font-bold text-3xl mb-2 text-green-700">¡Cita confirmada!</h1>
+            <p className="text-humo mb-6">Tu seña fue recibida. Te esperamos en Shelie's Hair Professional.</p>
+          </>
+        ) : (
+          <>
+            <h1 className="font-poppins font-bold text-3xl mb-2 text-green-700">¡Pago exitoso!</h1>
+            <p className="text-humo mb-6">Tu pedido ha sido confirmado y está en proceso.</p>
+          </>
+        )}
 
         <div className="bg-green-50 border border-green-200 rounded-2xl p-5 text-left space-y-2 mb-8">
           {orderId && (
             <div className="flex justify-between text-sm">
-              <span className="text-humo">Número de pedido</span>
+              <span className="text-humo">{isCita ? "Referencia de cita" : "Número de pedido"}</span>
               <span className="font-mono font-medium text-xs">{orderId}</span>
             </div>
           )}
@@ -64,12 +75,23 @@ function ConfirmacionContent() {
         </div>
 
         <p className="text-sm text-humo mb-8">
-          Recibirás un email de confirmación. Te contactaremos por WhatsApp para coordinar la entrega.
+          {isCita
+            ? "Recibirás un mensaje de confirmación. El resto del servicio se paga el día de tu cita."
+            : "Recibirás un email de confirmación. Te contactaremos por WhatsApp para coordinar la entrega."}
         </p>
 
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <Link href="/tienda" className="btn-vino">Seguir comprando</Link>
-          <Link href="/" className="btn-outline-vino">Ir al inicio</Link>
+          {isCita ? (
+            <>
+              <Link href="/servicios" className="btn-vino">Ver servicios</Link>
+              <Link href="/" className="btn-outline-vino">Ir al inicio</Link>
+            </>
+          ) : (
+            <>
+              <Link href="/tienda" className="btn-vino">Seguir comprando</Link>
+              <Link href="/" className="btn-outline-vino">Ir al inicio</Link>
+            </>
+          )}
         </div>
       </div>
     );
@@ -81,15 +103,19 @@ function ConfirmacionContent() {
         <div className="bg-amber-50 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6">
           <span className="text-5xl">⏳</span>
         </div>
-        <h1 className="font-poppins font-bold text-3xl mb-2 text-amber-700">Pago en proceso</h1>
+        <h1 className="font-poppins font-bold text-3xl mb-2 text-amber-700">
+          {isCita ? "Pago de seña en proceso" : "Pago en proceso"}
+        </h1>
         <p className="text-humo mb-6">
-          Tu pago está pendiente de confirmación. Esto puede tomar unos minutos.
+          {isCita
+            ? "Tu seña está pendiente de confirmación. Cuando se acredite, tu cita quedará confirmada."
+            : "Tu pago está pendiente de confirmación. Esto puede tomar unos minutos."}
         </p>
 
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 text-left space-y-2 mb-8">
           {orderId && (
             <div className="flex justify-between text-sm">
-              <span className="text-humo">Número de pedido</span>
+              <span className="text-humo">{isCita ? "Referencia de cita" : "Número de pedido"}</span>
               <span className="font-mono font-medium text-xs">{orderId}</span>
             </div>
           )}
@@ -101,12 +127,18 @@ function ConfirmacionContent() {
 
         <p className="text-sm text-humo mb-8">
           Si pagaste en efectivo (Efecty, Baloto), el pago se confirmará al acreditarse.
-          Te notificaremos por email y WhatsApp.
+          Te notificaremos por WhatsApp.
         </p>
 
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <Link href="/tienda" className="btn-vino">Seguir comprando</Link>
-          <Link href="/" className="btn-outline-vino">Ir al inicio</Link>
+          {isCita ? (
+            <Link href="/" className="btn-vino">Ir al inicio</Link>
+          ) : (
+            <>
+              <Link href="/tienda" className="btn-vino">Seguir comprando</Link>
+              <Link href="/" className="btn-outline-vino">Ir al inicio</Link>
+            </>
+          )}
         </div>
       </div>
     );

@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useChat } from "@/lib/chat-context";
 import { useCart } from "@/lib/cart-context";
-import { products, formatCOP, demoOrders } from "@/lib/data";
+import { products, formatCOP } from "@/lib/data";
 import { ChatMessage, ChatAction, Product } from "@/lib/types";
 
 
@@ -129,18 +129,15 @@ export default function ChatWidget() {
             <button onClick={close} className="text-white/70 hover:text-white">✕</button>
           </div>
           <div className="p-4 space-y-2">
-            <p className="text-sm text-carbon">¡Hola! 👋 ¿Qué buscas lograr?</p>
+            <p className="text-sm text-carbon">¡Hola! 👋 ¿En qué te ayudo?</p>
+            <button onClick={() => handleQuickStart("Quiero hacer un pedido")} className="w-full text-left text-sm bg-vino/10 hover:bg-vino/20 text-vino font-semibold rounded-xl px-4 py-2.5 transition-colors">
+              🛒 Hacer un pedido
+            </button>
+            <button onClick={() => handleQuickStart("Rastrear mi pedido")} className="w-full text-left text-sm bg-vino/10 hover:bg-vino/20 text-vino font-semibold rounded-xl px-4 py-2.5 transition-colors">
+              📦 Rastrear mi pedido
+            </button>
             <button onClick={() => handleQuickStart("Quiero controlar el frizz")} className="w-full text-left text-sm bg-blush/20 hover:bg-blush/30 rounded-xl px-4 py-2.5 transition-colors">
-              💆‍♀️ Control de frizz
-            </button>
-            <button onClick={() => handleQuickStart("Quiero brillo y suavidad")} className="w-full text-left text-sm bg-blush/20 hover:bg-blush/30 rounded-xl px-4 py-2.5 transition-colors">
-              ✨ Brillo y suavidad
-            </button>
-            <button onClick={() => handleQuickStart("Mi cabello está dañado, necesito reparación")} className="w-full text-left text-sm bg-blush/20 hover:bg-blush/30 rounded-xl px-4 py-2.5 transition-colors">
-              🔧 Reparar daño
-            </button>
-            <button onClick={() => handleQuickStart("Tengo caída excesiva y quiero estimular el crecimiento")} className="w-full text-left text-sm bg-blush/20 hover:bg-blush/30 rounded-xl px-4 py-2.5 transition-colors">
-              🌱 Anti-caída / Crecimiento
+              💆‍♀️ Recomendar producto
             </button>
             <button onClick={() => handleQuickStart("Qué servicios capilares ofrecen en sede")} className="w-full text-left text-sm bg-blush/20 hover:bg-blush/30 rounded-xl px-4 py-2.5 transition-colors">
               💈 Servicios en sede
@@ -177,10 +174,10 @@ export default function ChatWidget() {
               <p className="text-sm text-humo mb-4">¡Hola! Soy tu asesora. Pregúntame lo que necesites.</p>
               <div className="space-y-2">
                 {[
+                "Quiero hacer un pedido 🛒",
+                "Rastrear mi pedido 📦",
                 "¿Qué me sirve para el frizz?",
-                "¿Qué es el Oro Líquido Shelie's?",
                 "¿Qué servicios tienen en sede?",
-                "¿Cuánto cuesta el alisado orgánico?",
                 "Tengo caída de cabello, ¿qué me recomiendan?",
                 "¿Cuánto tarda el envío?",
               ].map((q) => (

@@ -1,10 +1,9 @@
 "use client";
 import { useState } from "react";
-import { promos as initialPromos } from "@/lib/data";
 import { Promo } from "@/lib/types";
 
 export default function AdminPromos() {
-  const [promosList, setPromosList] = useState<Promo[]>(initialPromos);
+  const [promosList, setPromosList] = useState<Promo[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ code: "", description: "", discountPct: 10, validUntil: "2026-12-31" });
 

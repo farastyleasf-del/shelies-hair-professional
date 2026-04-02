@@ -17,6 +17,14 @@ const pool = new Pool({
 
 export default pool;
 
+/**
+ * Garantiza que el schema bbdd_shelies exista dentro de la base de datos activa.
+ * Debe llamarse una sola vez al arrancar, antes de cualquier CREATE TABLE.
+ */
+export async function ensureSchema(): Promise<void> {
+  await pool.query("CREATE SCHEMA IF NOT EXISTS bbdd_shelies");
+}
+
 export async function query<T = Record<string, unknown>>(
   sql: string,
   params?: unknown[]

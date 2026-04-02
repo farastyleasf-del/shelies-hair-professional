@@ -1,490 +1,468 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAdminTheme } from "@/lib/admin-theme";
-import {
-  funnelData, channelReports, topIntents, agents,
-  salesKPIs, chatKPIs, formatCOPAdmin, channelIcons,
-} from "@/lib/admin-data";
+import { apiUrl, authedFetch } from "@/lib/api";
 
-/* ── Card ── */
-function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  const t = useAdminTheme();
-  return <div className={`${t.bgCard} border ${t.border} rounded-2xl p-5 ${className}`}>{children}</div>;
+interface SessionStat {
+  user_name: string; user_email: string;
+  session_date: string; sessions: string; total_minutes: string;
+}
+interface ChatStat {
+  sender_name: string; session_date: string;
+  conversations: string; messages_sent: string;
+}
+interface SessionToday {
+  id: number; user_name: string; user_email: string;
+  started_at: string; ended_at: string | null; duration_minutes: number | null;
+}
+interface ShiftStat {
+  employee_name: string; employee_email: string; shift_date: string;
+  shifts: string; total_minutes: string; total_appointments: string;
+}
+interface StylistProductivity {
+  stylist_name: string; shift_date: string;
+  appointments_completed: string; avg_duration: string;
 }
 
-/* ── KPI Tile ── */
-function KPITile({ label, value, sub, delta, icon, accent }: {
-  label: string; value: string; sub?: string; delta?: string; icon: string; accent?: boolean;
+function fmtMin(m: number) {
+  const h = Math.floor(m / 60);
+  const min = m % 60;
+  return h > 0 ? `${h}h ${min}m` : `${min}m`;
+}
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" });
+}
+function fmtDate(s: string) {
+  const [y, m, d] = s.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+function KPI({ label, value, sub, icon, color }: {
+  label: string; value: string; sub?: string; icon: string; color?: string;
 }) {
   const t = useAdminTheme();
-  const dc = delta?.startsWith("+") ? "text-emerald-400" : delta?.startsWith("-") ? "text-red-400" : t.textMuted;
   return (
-    <Card className={accent ? `ring-1 ${t.accentBorder}` : ""}>
-      <div className="flex items-start justify-between mb-3">
-        <span className={`text-[11px] uppercase tracking-wider font-semibold ${t.textFaint}`}>{label}</span>
-        <span className="text-xl">{icon}</span>
+    <div className="rounded-2xl border p-5 flex flex-col gap-2"
+      style={{ backgroundColor: t.colors.bgCard, borderColor: t.colors.border }}>
+      <div className="flex items-center justify-between">
+        <p className="text-xs uppercase tracking-wider font-semibold" style={{ color: t.colors.textMuted }}>{label}</p>
+        <span className="text-2xl">{icon}</span>
       </div>
-      <p className={`text-2xl font-bold ${accent ? t.accentText : t.text} font-poppins`}>{value}</p>
-      <div className="flex items-center gap-2 mt-1.5">
-        {delta && <span className={`text-xs font-semibold ${dc}`}>{delta}</span>}
-        {sub && <span className={`text-[11px] ${t.textFaint}`}>{sub}</span>}
-      </div>
-    </Card>
-  );
-}
-
-/* ── Horizontal Bar ── */
-function HBarChart({ data, maxVal }: { data: { label: string; value: number; color: string }[]; maxVal?: number }) {
-  const t = useAdminTheme();
-  const max = maxVal || Math.max(...data.map((d) => d.value));
-  return (
-    <div className="space-y-3">
-      {data.map((d, i) => (
-        <div key={i}>
-          <div className="flex items-center justify-between mb-1">
-            <span className={`text-xs font-medium ${t.text}`}>{d.label}</span>
-            <span className={`text-xs font-bold ${t.textMuted}`}>{d.value.toLocaleString()}</span>
-          </div>
-          <div className={`h-6 rounded-lg ${t.mode === "dark" ? "bg-white/5" : "bg-gray-100"} overflow-hidden`}>
-            <div className={`h-full rounded-lg ${d.color} flex items-center justify-end pr-2`} style={{ width: `${Math.max((d.value / max) * 100, 2)}%` }}>
-              <span className="text-[10px] font-bold text-white drop-shadow-sm">{((d.value / max) * 100).toFixed(0)}%</span>
-            </div>
-          </div>
-        </div>
-      ))}
+      <p className="text-3xl font-bold" style={{ color: color ?? t.colors.text }}>{value}</p>
+      {sub && <p className="text-xs" style={{ color: t.colors.textFaint }}>{sub}</p>}
     </div>
   );
 }
 
-/* ── Vertical Bars ── */
-function VBarChart({ bars, height = 200 }: { bars: { label: string; value: number; color: string }[]; height?: number }) {
+export default function IndicadoresPage() {
   const t = useAdminTheme();
-  const max = Math.max(...bars.map((b) => b.value));
-  const gridLines = 5;
-  const gc = t.mode === "dark" ? "border-white/5" : "border-gray-100";
-  return (
-    <div>
-      <div className="flex items-end gap-1" style={{ height }}>
-        <div className="flex flex-col justify-between h-full pr-2">
-          {Array.from({ length: gridLines + 1 }).map((_, i) => (
-            <span key={i} className={`text-[9px] ${t.textFaint} text-right w-10 leading-none`}>{Math.round(max - (max / gridLines) * i).toLocaleString()}</span>
-          ))}
-        </div>
-        <div className={`flex-1 relative flex items-end gap-2 border-l border-b ${gc} pl-2 pb-1`}>
-          {Array.from({ length: gridLines }).map((_, i) => (
-            <div key={i} className={`absolute left-0 right-0 border-t ${gc}`} style={{ bottom: `${((i + 1) / gridLines) * 100}%` }} />
-          ))}
-          {bars.map((b, i) => {
-            const pct = max > 0 ? (b.value / max) * 100 : 0;
-            return (
-              <div key={i} className="flex-1 flex flex-col items-center relative z-10 group">
-                <div className={`absolute -top-8 opacity-0 group-hover:opacity-100 transition-opacity ${t.bgDeep} ${t.border} border rounded-lg px-2 py-1 text-[10px] ${t.text} font-bold whitespace-nowrap shadow-xl z-20`}>
-                  {b.value.toLocaleString()}
-                </div>
-                <div className={`w-full max-w-[40px] rounded-t-lg ${b.color} hover:opacity-90 cursor-pointer`} style={{ height: `${Math.max(pct, 2)}%` }} />
-              </div>
-            );
-          })}
-        </div>
-      </div>
-      <div className="flex ml-12 gap-2 mt-2">
-        {bars.map((b, i) => <div key={i} className="flex-1 text-center"><span className={`text-[10px] ${t.textFaint} truncate block`}>{b.label}</span></div>)}
-      </div>
-    </div>
-  );
-}
+  const [days, setDays] = useState(7);
+  const [sessions, setSessions]       = useState<SessionStat[]>([]);
+  const [chatStats, setChatStats]     = useState<ChatStat[]>([]);
+  const [todaySessions, setTodaySessions] = useState<SessionToday[]>([]);
+  const [shiftStats, setShiftStats]   = useState<ShiftStat[]>([]);
+  const [stylistProd, setStylistProd] = useState<StylistProductivity[]>([]);
+  const [loading, setLoading] = useState(true);
 
-/* ── Donut ── */
-function DonutChart({ segments, size = 140, label }: { segments: { value: number; color: string; label: string }[]; size?: number; label?: string }) {
-  const t = useAdminTheme();
-  const total = segments.reduce((s, seg) => s + seg.value, 0);
-  let cum = 0;
-  const parts = segments.map((seg) => { const start = (cum / total) * 360; cum += seg.value; return `${seg.color} ${start}deg ${(cum / total) * 360}deg`; });
-  const innerBg = t.mode === "dark" ? "#1A1A1A" : "#ffffff";
-  return (
-    <div className="flex flex-col items-center">
-      <div className="rounded-full relative flex items-center justify-center" style={{ width: size, height: size, background: `conic-gradient(${parts.join(", ")})` }}>
-        <div className="rounded-full flex items-center justify-center" style={{ width: size * 0.6, height: size * 0.6, backgroundColor: innerBg }}>
-          <div className="text-center">
-            <p className={`text-lg font-bold ${t.text} font-poppins`}>{total.toLocaleString()}</p>
-            {label && <p className={`text-[9px] ${t.textFaint}`}>{label}</p>}
-          </div>
-        </div>
-      </div>
-      <div className="mt-3 space-y-1">
-        {segments.map((seg, i) => (
-          <div key={i} className="flex items-center gap-2 text-xs">
-            <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: seg.color }} />
-            <span className={t.textMuted}>{seg.label}</span>
-            <span className={`font-bold ${t.text} ml-auto`}>{((seg.value / total) * 100).toFixed(0)}%</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([
+      authedFetch(apiUrl(`/api/employees/sessions/stats?days=${days}`)).then(r => r.json()).catch(() => []),
+      authedFetch(apiUrl(`/api/employees/sessions/chat-stats?days=${days}`)).then(r => r.json()).catch(() => []),
+      authedFetch(apiUrl("/api/employees/sessions/today")).then(r => r.json()).catch(() => []),
+      authedFetch(apiUrl(`/api/stylist/shifts/stats?days=${days}`)).then(r => r.json()).catch(() => []),
+      authedFetch(apiUrl(`/api/stylist/productivity?days=${days}`)).then(r => r.json()).catch(() => []),
+    ]).then(([s, c, td, ss, sp]) => {
+      if (Array.isArray(s)) setSessions(s);
+      if (Array.isArray(c)) setChatStats(c);
+      if (Array.isArray(td)) setTodaySessions(td);
+      if (Array.isArray(ss)) setShiftStats(ss);
+      if (Array.isArray(sp)) setStylistProd(sp);
+    }).finally(() => setLoading(false));
+  }, [days]);
 
-/* ── Sparkline ── */
-function Sparkline({ values, color }: { values: number[]; color: string }) {
-  const max = Math.max(...values);
-  return (
-    <div className="flex items-end gap-[2px] h-6">
-      {values.map((v, i) => <div key={i} className={`w-1 rounded-full ${color} opacity-60`} style={{ height: `${Math.max((v / max) * 100, 8)}%` }} />)}
-    </div>
-  );
-}
+  // KPIs globales
+  const totalHoy = todaySessions.reduce((s, x) => s + (x.duration_minutes ?? 0), 0);
+  const activosAhora = todaySessions.filter(s => !s.ended_at).length;
+  const totalConvs = chatStats.reduce((s, x) => s + parseInt(x.conversations), 0);
+  const totalMsgs  = chatStats.reduce((s, x) => s + parseInt(x.messages_sent), 0);
 
-/* ── Table ── */
-function DataTable({ columns, rows }: { columns: { key: string; label: string; align?: string }[]; rows: Record<string, React.ReactNode>[] }) {
-  const t = useAdminTheme();
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-xs">
-        <thead>
-          <tr className={`border-b ${t.border}`}>
-            {columns.map((c) => <th key={c.key} className={`py-2.5 px-3 ${c.align === "right" ? "text-right" : "text-left"} ${t.textFaint} uppercase tracking-wider text-[10px] font-semibold`}>{c.label}</th>)}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, i) => (
-            <tr key={i} className={`border-b ${t.border} ${t.tableRowHover} transition-colors`}>
-              {columns.map((c) => <td key={c.key} className={`py-2.5 px-3 ${c.align === "right" ? "text-right" : "text-left"}`}>{row[c.key]}</td>)}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
+  // Adherencia por agente (últimos N días)
+  const byAgent: Record<string, { sessions: number; minutes: number }> = {};
+  sessions.forEach(s => {
+    if (!byAgent[s.user_name]) byAgent[s.user_name] = { sessions: 0, minutes: 0 };
+    byAgent[s.user_name].sessions += parseInt(s.sessions);
+    byAgent[s.user_name].minutes  += parseInt(s.total_minutes);
+  });
 
-/* ── Channel helpers ── */
-const chName: Record<string, string> = { whatsapp: "WhatsApp", instagram: "Instagram", web: "Web Chat", facebook: "Facebook", tiktok: "TikTok" };
-const chColor: Record<string, string> = { whatsapp: "bg-emerald-500", instagram: "bg-pink-500", web: "bg-blue-500", facebook: "bg-purple-500", tiktok: "bg-black" };
-const chHex: Record<string, string> = { whatsapp: "#10b981", instagram: "#ec4899", web: "#3b82f6", facebook: "#8b5cf6", tiktok: "#010101" };
-const chEmoji: Record<string, string> = { whatsapp: "💚", instagram: "📸", web: "🌐", facebook: "💬", tiktok: "🎵" };
-
-/* ================================================================ */
-export default function ReportesPage() {
-  const t = useAdminTheme();
-  const [tab, setTab] = useState<"overview" | "funnel" | "canales" | "equipo" | "intents">("overview");
-
-  const tabs = [
-    { id: "overview" as const, label: "📊 Overview" },
-    { id: "funnel" as const, label: "🔄 Funnel" },
-    { id: "canales" as const, label: "📡 Canales" },
-    { id: "equipo" as const, label: "👥 Equipo" },
-    { id: "intents" as const, label: "🎯 Intenciones" },
-  ];
-
-  const activeTab = `bg-gradient-to-r ${t.accentGradient} text-white shadow-lg ${t.accentShadow}`;
-  const inactiveTab = t.mode === "dark" ? "bg-white/5 text-white/50 hover:text-white hover:bg-white/10" : "bg-gray-100 text-gray-500 hover:text-gray-700 hover:bg-gray-200";
+  // Productividad chat por agente
+  const byAgentChat: Record<string, { conversations: number; messages: number }> = {};
+  chatStats.forEach(c => {
+    if (!byAgentChat[c.sender_name]) byAgentChat[c.sender_name] = { conversations: 0, messages: 0 };
+    byAgentChat[c.sender_name].conversations += parseInt(c.conversations);
+    byAgentChat[c.sender_name].messages      += parseInt(c.messages_sent);
+  });
 
   return (
-    <div className="space-y-6 max-w-[1400px] mx-auto">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className={`text-2xl font-bold font-poppins ${t.text}`}>📈 Business Intelligence</h1>
-          <p className={`text-sm ${t.textMuted} mt-0.5`}>Panel de análisis y métricas operacionales</p>
+          <h1 className="text-2xl font-bold" style={{ color: t.colors.text }}>📊 Reportes</h1>
+          <p className="text-sm mt-0.5" style={{ color: t.colors.textMuted }}>
+            Adherencia, productividad y métricas del equipo
+          </p>
         </div>
-        <div className="flex items-center gap-3">
-          <select className={`${t.inputBg} ${t.inputBorder} border rounded-xl px-3 py-2 text-xs ${t.text} focus:outline-none`}>
-            <option>Últimos 30 días</option><option>Últimos 7 días</option><option>Este mes</option><option>Trimestre actual</option>
-          </select>
-          <button className={`px-4 py-2 rounded-xl text-xs font-semibold ${inactiveTab} transition-colors`}>📥 Exportar</button>
+        <div className="flex items-center gap-1 rounded-xl border overflow-hidden"
+          style={{ borderColor: t.colors.border }}>
+          {[7, 14, 30].map(d => (
+            <button key={d} onClick={() => setDays(d)}
+              className="px-4 py-2 text-xs font-semibold transition-colors"
+              style={{
+                backgroundColor: days === d ? t.colors.primary : "transparent",
+                color: days === d ? "#fff" : t.colors.textMuted,
+              }}>
+              {d}d
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className="flex gap-2 flex-wrap">
-        {tabs.map((tb) => <button key={tb.id} onClick={() => setTab(tb.id)} className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${tab === tb.id ? activeTab : inactiveTab}`}>{tb.label}</button>)}
-      </div>
-
-      {/* ══════════ OVERVIEW ══════════ */}
-      {tab === "overview" && (
-        <div className="space-y-6">
+      {loading ? (
+        <div className="py-20 text-center text-sm" style={{ color: t.colors.textFaint }}>Cargando indicadores...</div>
+      ) : (
+        <>
+          {/* KPIs top */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <KPITile icon="💰" label="Ingresos Mes" value={formatCOPAdmin(salesKPIs.revenueMonth)} delta="+12.4%" sub="vs mes anterior" accent />
-            <KPITile icon="🛒" label="Pedidos Mes" value={salesKPIs.ordersMonth.toString()} delta="+8.2%" sub="completados" />
-            <KPITile icon="💬" label="Chats Hoy" value={chatKPIs.newChatsToday.toString()} delta="+23.1%" sub="nuevos" />
-            <KPITile icon="⚡" label="Conversión" value={`${salesKPIs.conversionRate}%`} delta="+2.1%" sub="del embudo" accent />
+            <KPI label="Agentes activos ahora" value={String(activosAhora)} icon="🟢"
+              color={activosAhora > 0 ? t.colors.success : t.colors.textMuted}
+              sub="En sesión en este momento" />
+            <KPI label="Minutos conectados hoy" value={fmtMin(totalHoy)} icon="⏱️"
+              sub={`${todaySessions.length} sesiones hoy`} />
+            <KPI label={`Conversaciones (${days}d)`} value={String(totalConvs)} icon="💬"
+              color={t.colors.primary} />
+            <KPI label={`Mensajes enviados (${days}d)`} value={String(totalMsgs)} icon="📤"
+              sub="Solo mensajes salientes" />
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <Card className="lg:col-span-2">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className={`text-sm font-bold ${t.text}`}>Ingresos por Canal</h3>
-                  <p className={`text-[11px] ${t.textFaint}`}>Distribución de ventas por canal de origen</p>
-                </div>
-                <Sparkline values={[42,56,38,67,55,78,62,89,72,95,88,102]} color="bg-emerald-400" />
-              </div>
-              <VBarChart height={180} bars={channelReports.map((ch) => ({
-                label: chName[ch.channel] || ch.channel, value: ch.revenue, color: chColor[ch.channel] || "bg-gray-500",
-              }))} />
-            </Card>
-            <Card>
-              <h3 className={`text-sm font-bold ${t.text} mb-1`}>Distribución de Canales</h3>
-              <p className={`text-[11px] ${t.textFaint} mb-4`}>Participación por conversaciones</p>
-              <DonutChart label="conversaciones" segments={channelReports.map((ch) => ({
-                value: ch.conversations, color: chHex[ch.channel] || "#6b7280", label: chName[ch.channel] || ch.channel,
-              }))} />
-            </Card>
-          </div>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <KPITile icon="📨" label="Tiempo Respuesta" value={`${chatKPIs.avgFRT}s`} delta="-15%" sub="promedio FRT" />
-            <KPITile icon="🤖" label="Handoff IA" value={`${chatKPIs.handoffRate}%`} delta="-2%" sub="IA → humano" />
-            <KPITile icon="📦" label="Ticket Promedio" value={formatCOPAdmin(salesKPIs.aov)} delta="+4.1%" sub="por pedido" />
-            <KPITile icon="💎" label="Chat → Venta" value={`${chatKPIs.chatToSaleRate}%`} delta="+5%" sub="conversión chat" accent />
-          </div>
-        </div>
-      )}
 
-      {/* ══════════ FUNNEL ══════════ */}
-      {tab === "funnel" && (
-        <div className="space-y-6">
-          <Card>
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h3 className={`text-sm font-bold ${t.text}`}>Embudo de Conversión</h3>
-                <p className={`text-[11px] ${t.textFaint}`}>De visitante a cliente — últimos 30 días</p>
-              </div>
-              <div className={`px-3 py-1.5 rounded-lg text-xs font-bold ${t.mode === "dark" ? "bg-emerald-500/15 text-emerald-400" : "bg-emerald-50 text-emerald-600"}`}>
-                Conversión Total: {salesKPIs.conversionRate}%
-              </div>
+          {/* Sesiones hoy */}
+          <div className="rounded-2xl border overflow-hidden" style={{ borderColor: t.colors.border }}>
+            <div className="px-5 py-3 border-b flex items-center justify-between"
+              style={{ backgroundColor: t.colors.bgCard, borderColor: t.colors.border }}>
+              <h2 className="text-sm font-semibold" style={{ color: t.colors.text }}>
+                🕐 Sesiones de hoy
+              </h2>
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+                style={{ backgroundColor: t.colors.primaryLight, color: t.colors.primary }}>
+                {todaySessions.length} registros
+              </span>
             </div>
-            <div className="space-y-3">
-              {funnelData.map((step, i) => {
-                const maxCount = funnelData[0].count;
-                const pct = (step.count / maxCount) * 100;
-                const dropOff = i > 0 ? ((1 - step.count / funnelData[i - 1].count) * 100).toFixed(1) : null;
-                const colors = ["bg-gradient-to-r from-blue-500 to-blue-400","bg-gradient-to-r from-cyan-500 to-cyan-400","bg-gradient-to-r from-emerald-500 to-emerald-400","bg-gradient-to-r from-amber-500 to-amber-400","bg-gradient-to-r from-rose-500 to-rose-400"];
-                return (
-                  <div key={step.name}>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center gap-3">
-                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white ${colors[i]} shadow-sm`}>{i + 1}</span>
-                        <span className={`text-sm font-semibold ${t.text}`}>{step.name}</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        {dropOff && <span className="text-[10px] text-red-400 font-medium bg-red-500/10 px-2 py-0.5 rounded-full">↓ {dropOff}% drop-off</span>}
-                        <span className={`text-sm font-bold ${t.text}`}>{step.count.toLocaleString()}</span>
-                      </div>
-                    </div>
-                    <div className={`h-10 rounded-xl ${t.mode === "dark" ? "bg-white/5" : "bg-gray-50"} overflow-hidden`}>
-                      <div className={`h-full ${colors[i]} rounded-xl flex items-center justify-end pr-3`} style={{ width: `${Math.max(pct, 3)}%` }}>
-                        <span className="text-xs font-bold text-white drop-shadow-sm">{pct.toFixed(1)}%</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
-          <Card>
-            <h3 className={`text-sm font-bold ${t.text} mb-4`}>📋 Detalle del Embudo</h3>
-            <DataTable
-              columns={[{ key: "stage", label: "Etapa" },{ key: "count", label: "Usuarios", align: "right" },{ key: "pct", label: "% del Total", align: "right" },{ key: "conv", label: "Conversión", align: "right" },{ key: "drop", label: "Drop-off", align: "right" }]}
-              rows={funnelData.map((step, i) => ({
-                stage: <span className="font-medium">{step.name}</span>,
-                count: <span className="font-bold">{step.count.toLocaleString()}</span>,
-                pct: <span>{((step.count / funnelData[0].count) * 100).toFixed(1)}%</span>,
-                conv: i > 0 ? <span className="text-emerald-400 font-semibold">{((step.count / funnelData[i - 1].count) * 100).toFixed(1)}%</span> : <span className={t.textFaint}>—</span>,
-                drop: i > 0 ? <span className="text-red-400 font-semibold">{((1 - step.count / funnelData[i - 1].count) * 100).toFixed(1)}%</span> : <span className={t.textFaint}>—</span>,
-              }))}
-            />
-          </Card>
-        </div>
-      )}
-
-      {/* ══════════ CANALES ══════════ */}
-      {tab === "canales" && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {channelReports.map((ch) => (
-              <Card key={ch.channel}>
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-xl">{chEmoji[ch.channel] || "📡"}</span>
-                  <span className={`font-bold text-sm ${t.text}`}>{chName[ch.channel]}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div><p className={`text-[10px] ${t.textFaint} uppercase`}>Conversaciones</p><p className={`text-lg font-bold ${t.text}`}>{ch.conversations.toLocaleString()}</p></div>
-                  <div><p className={`text-[10px] ${t.textFaint} uppercase`}>Ingresos</p><p className={`text-lg font-bold ${t.text}`}>{formatCOPAdmin(ch.revenue)}</p></div>
-                  <div><p className={`text-[10px] ${t.textFaint} uppercase`}>Pedidos</p><p className={`text-sm font-bold ${t.text}`}>{ch.orders}</p></div>
-                  <div><p className={`text-[10px] ${t.textFaint} uppercase`}>Conversión</p><p className="text-sm font-bold text-emerald-400">{ch.conversion}%</p></div>
-                </div>
-              </Card>
-            ))}
+            {todaySessions.length === 0 ? (
+              <div className="p-10 text-center text-sm" style={{ backgroundColor: t.colors.bgCard, color: t.colors.textFaint }}>
+                Sin sesiones registradas hoy. Los agentes deben iniciar sesión en el módulo Agente.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm" style={{ backgroundColor: t.colors.bgCard }}>
+                  <thead>
+                    <tr style={{ borderBottom: `1px solid ${t.colors.border}` }}>
+                      {["Agente", "Inicio", "Fin", "Duración", "Estado"].map(h => (
+                        <th key={h} className="text-left px-5 py-3 text-xs uppercase tracking-wider font-semibold"
+                          style={{ color: t.colors.textMuted }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {todaySessions.map(s => (
+                      <tr key={s.id} style={{ borderBottom: `1px solid ${t.colors.border}` }}>
+                        <td className="px-5 py-3">
+                          <p className="font-medium" style={{ color: t.colors.text }}>{s.user_name}</p>
+                          <p className="text-[10px]" style={{ color: t.colors.textFaint }}>{s.user_email}</p>
+                        </td>
+                        <td className="px-5 py-3 text-sm font-mono" style={{ color: t.colors.textMuted }}>
+                          {fmtTime(s.started_at)}
+                        </td>
+                        <td className="px-5 py-3 text-sm font-mono" style={{ color: t.colors.textMuted }}>
+                          {s.ended_at ? fmtTime(s.ended_at) : "—"}
+                        </td>
+                        <td className="px-5 py-3 text-sm font-semibold" style={{ color: t.colors.text }}>
+                          {s.duration_minutes != null ? fmtMin(s.duration_minutes) : "En curso"}
+                        </td>
+                        <td className="px-5 py-3">
+                          <span className="text-[10px] px-2 py-1 rounded-full font-semibold"
+                            style={{
+                              backgroundColor: s.ended_at ? t.colors.border : t.colors.successLight,
+                              color: s.ended_at ? t.colors.textFaint : t.colors.successText,
+                            }}>
+                            {s.ended_at ? "Finalizada" : "🟢 Activa"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
-          <Card>
-            <h3 className={`text-sm font-bold ${t.text} mb-1`}>💰 Ingresos por Canal</h3>
-            <p className={`text-[11px] ${t.textFaint} mb-4`}>Comparación de revenue generado — con etiquetas de valor</p>
-            <VBarChart height={220} bars={channelReports.map((ch) => ({
-              label: chName[ch.channel], value: ch.revenue, color: chColor[ch.channel] || "bg-gray-500",
-            }))} />
-          </Card>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Card>
-              <h3 className={`text-sm font-bold ${t.text} mb-1`}>📊 Tasa de Conversión</h3>
-              <p className={`text-[11px] ${t.textFaint} mb-4`}>Porcentaje de conversión por canal</p>
-              <HBarChart maxVal={10} data={channelReports.map((ch) => ({
-                label: chName[ch.channel], value: ch.conversion, color: chColor[ch.channel] || "bg-gray-500",
-              }))} />
-            </Card>
-            <Card>
-              <h3 className={`text-sm font-bold ${t.text} mb-1`}>📨 Conversaciones por Canal</h3>
-              <p className={`text-[11px] ${t.textFaint} mb-4`}>Volumen de conversaciones atendidas</p>
-              <HBarChart data={channelReports.map((ch) => ({
-                label: chName[ch.channel], value: ch.conversations, color: chColor[ch.channel] || "bg-gray-500",
-              }))} />
-            </Card>
-          </div>
-          <Card>
-            <h3 className={`text-sm font-bold ${t.text} mb-4`}>📋 Detalle Completo por Canal</h3>
-            <DataTable
-              columns={[{ key: "ch", label: "Canal" },{ key: "convs", label: "Conversaciones", align: "right" },{ key: "orders", label: "Pedidos", align: "right" },{ key: "rev", label: "Revenue", align: "right" },{ key: "conv", label: "Conversión", align: "right" }]}
-              rows={channelReports.map((ch) => ({
-                ch: <span className="font-semibold">{channelIcons[ch.channel]} {chName[ch.channel]}</span>,
-                convs: <span className="font-bold">{ch.conversations.toLocaleString()}</span>,
-                orders: <span className="font-bold">{ch.orders}</span>,
-                rev: <span className={`font-bold ${t.accentText}`}>{formatCOPAdmin(ch.revenue)}</span>,
-                conv: <span className="font-bold text-emerald-400">{ch.conversion}%</span>,
-              }))}
-            />
-          </Card>
-        </div>
-      )}
 
-      {/* ══════════ EQUIPO ══════════ */}
-      {tab === "equipo" && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {agents.map((agent) => {
-              const rc: Record<string, string> = { admin: "text-red-400 bg-red-500/10", supervisor: "text-amber-400 bg-amber-500/10", agente: "text-blue-400 bg-blue-500/10", soporte: "text-purple-400 bg-purple-500/10" };
-              const sd = agent.active ? "bg-emerald-400" : "bg-gray-500";
-              const csatPct = Math.round(agent.stats.satisfaction * 20);
-              const progress = Math.min((agent.stats.chatsToday / agent.goals.chatsPerDay) * 100, 100);
-              return (
-                <Card key={agent.id}>
-                  <div className="flex items-start gap-4">
-                    <div className="relative flex-shrink-0">
-                      <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${t.accentGradient} flex items-center justify-center text-white font-bold text-lg shadow-lg ${t.accentShadow}`}>{agent.name.charAt(0)}</div>
-                      <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 ${sd} rounded-full border-2 ${t.mode === "dark" ? "border-[#1A1A1A]" : "border-white"}`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className={`font-bold text-sm ${t.text}`}>{agent.name}</span>
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${rc[agent.role] || "text-gray-400 bg-gray-500/10"}`}>{agent.role.toUpperCase()}</span>
-                      </div>
-                      <p className={`text-[11px] ${t.textFaint}`}>{agent.channels.join(" · ")}</p>
-                      <div className="grid grid-cols-3 gap-3 mt-3">
-                        <div><p className={`text-[9px] ${t.textFaint} uppercase`}>Chats hoy</p><p className={`text-base font-bold ${t.text}`}>{agent.stats.chatsToday}</p></div>
-                        <div><p className={`text-[9px] ${t.textFaint} uppercase`}>Backlog</p><p className={`text-base font-bold ${t.text}`}>{agent.stats.backlog}</p></div>
-                        <div><p className={`text-[9px] ${t.textFaint} uppercase`}>CSAT</p><p className={`text-base font-bold ${csatPct >= 90 ? "text-emerald-400" : csatPct >= 80 ? "text-amber-400" : "text-red-400"}`}>{csatPct}%</p></div>
-                      </div>
-                      <div className="mt-2">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className={`text-[9px] ${t.textFaint}`}>Rendimiento</span>
-                          <span className={`text-[10px] font-bold ${t.text}`}>{agent.stats.chatsToday}/{agent.goals.chatsPerDay}</span>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Adherencia por agente */}
+            <div className="rounded-2xl border overflow-hidden" style={{ borderColor: t.colors.border }}>
+              <div className="px-5 py-3 border-b"
+                style={{ backgroundColor: t.colors.bgCard, borderColor: t.colors.border }}>
+                <h2 className="text-sm font-semibold" style={{ color: t.colors.text }}>
+                  ⏳ Adherencia por agente ({days}d)
+                </h2>
+              </div>
+              {Object.keys(byAgent).length === 0 ? (
+                <div className="p-8 text-center text-sm" style={{ backgroundColor: t.colors.bgCard, color: t.colors.textFaint }}>
+                  Sin datos de sesiones en este período
+                </div>
+              ) : (
+                <div style={{ backgroundColor: t.colors.bgCard }}>
+                  {Object.entries(byAgent)
+                    .sort((a, b) => b[1].minutes - a[1].minutes)
+                    .map(([name, stats]) => (
+                      <div key={name} className="flex items-center gap-4 px-5 py-3"
+                        style={{ borderBottom: `1px solid ${t.colors.border}` }}>
+                        <div className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold text-white"
+                          style={{ backgroundColor: t.colors.primary }}>
+                          {name.split(" ").map(p => p[0]).slice(0, 2).join("").toUpperCase()}
                         </div>
-                        <div className={`h-2 rounded-full ${t.mode === "dark" ? "bg-white/5" : "bg-gray-100"} overflow-hidden`}>
-                          <div className={`h-full rounded-full ${progress >= 100 ? "bg-emerald-500" : progress >= 70 ? "bg-amber-500" : "bg-red-500"}`} style={{ width: `${progress}%` }} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate" style={{ color: t.colors.text }}>{name}</p>
+                          <div className="flex items-center gap-3 mt-0.5">
+                            <span className="text-[10px]" style={{ color: t.colors.textFaint }}>
+                              {stats.sessions} sesión{stats.sessions !== 1 ? "es" : ""}
+                            </span>
+                            <span className="text-[10px] font-semibold" style={{ color: t.colors.primary }}>
+                              {fmtMin(stats.minutes)} conectado
+                            </span>
+                          </div>
+                        </div>
+                        {/* Barra de progreso (máx 8h/día × días) */}
+                        <div className="w-20">
+                          <div className="h-1.5 rounded-full overflow-hidden"
+                            style={{ backgroundColor: t.colors.border }}>
+                            <div className="h-full rounded-full transition-all"
+                              style={{
+                                width: `${Math.min(100, (stats.minutes / (days * 480)) * 100)}%`,
+                                backgroundColor: t.colors.primary,
+                              }} />
+                          </div>
+                          <p className="text-[9px] text-right mt-0.5" style={{ color: t.colors.textFaint }}>
+                            {Math.round((stats.minutes / (days * 480)) * 100)}%
+                          </p>
                         </div>
                       </div>
-                    </div>
+                    ))}
+                </div>
+              )}
+            </div>
+
+            {/* Productividad chat */}
+            <div className="rounded-2xl border overflow-hidden" style={{ borderColor: t.colors.border }}>
+              <div className="px-5 py-3 border-b"
+                style={{ backgroundColor: t.colors.bgCard, borderColor: t.colors.border }}>
+                <h2 className="text-sm font-semibold" style={{ color: t.colors.text }}>
+                  💬 Productividad Chat ({days}d)
+                </h2>
+              </div>
+              {Object.keys(byAgentChat).length === 0 ? (
+                <div className="p-8 text-center text-sm" style={{ backgroundColor: t.colors.bgCard, color: t.colors.textFaint }}>
+                  Sin datos de mensajes en este período
+                </div>
+              ) : (
+                <div style={{ backgroundColor: t.colors.bgCard }}>
+                  {Object.entries(byAgentChat)
+                    .sort((a, b) => b[1].messages - a[1].messages)
+                    .map(([name, stats]) => (
+                      <div key={name} className="flex items-center gap-4 px-5 py-3"
+                        style={{ borderBottom: `1px solid ${t.colors.border}` }}>
+                        <div className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold text-white"
+                          style={{ backgroundColor: "#059669" }}>
+                          {name.split(" ").map(p => p[0]).slice(0, 2).join("").toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate" style={{ color: t.colors.text }}>{name}</p>
+                          <div className="flex items-center gap-3 mt-0.5">
+                            <span className="text-[10px]" style={{ color: t.colors.textFaint }}>
+                              {stats.conversations} conversación{stats.conversations !== 1 ? "es" : ""}
+                            </span>
+                            <span className="text-[10px] font-semibold text-emerald-600">
+                              {stats.messages} mensajes
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-base font-bold" style={{ color: t.colors.text }}>
+                            {stats.messages}
+                          </p>
+                          <p className="text-[9px]" style={{ color: t.colors.textFaint }}>msgs</p>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ── Sección Estilistas ── */}
+          {(shiftStats.length > 0 || stylistProd.length > 0) && (
+            <>
+              <div className="flex items-center gap-3 mt-2">
+                <div className="flex-1 h-px" style={{ backgroundColor: t.colors.border }} />
+                <span className="text-xs font-semibold uppercase tracking-wider px-3 py-1 rounded-full"
+                  style={{ backgroundColor: "#DCFCE7", color: "#14532D" }}>
+                  💇 Estilistas
+                </span>
+                <div className="flex-1 h-px" style={{ backgroundColor: t.colors.border }} />
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Adherencia estilistas */}
+                <div className="rounded-2xl border overflow-hidden" style={{ borderColor: t.colors.border }}>
+                  <div className="px-5 py-3 border-b"
+                    style={{ backgroundColor: t.colors.bgCard, borderColor: t.colors.border }}>
+                    <h2 className="text-sm font-semibold" style={{ color: t.colors.text }}>
+                      ⏱ Turnos estilistas ({days}d)
+                    </h2>
                   </div>
-                </Card>
-              );
-            })}
-          </div>
-          <Card>
-            <h3 className={`text-sm font-bold ${t.text} mb-1`}>📊 Comparativa de Rendimiento</h3>
-            <p className={`text-[11px] ${t.textFaint} mb-4`}>Chats hoy por agente vs objetivo</p>
-            <HBarChart data={agents.map((a) => {
-              const pct = Math.min((a.stats.chatsToday / a.goals.chatsPerDay) * 100, 100);
-              return {
-                label: `${a.name} (${a.stats.chatsToday}/${a.goals.chatsPerDay})`, value: a.stats.chatsToday,
-                color: pct >= 100 ? "bg-emerald-500" : pct >= 70 ? "bg-amber-500" : "bg-red-500",
-              };
-            })} />
-          </Card>
-          <Card>
-            <h3 className={`text-sm font-bold ${t.text} mb-4`}>📋 Tabla de Equipo</h3>
-            <DataTable
-              columns={[{ key: "agent", label: "Agente" },{ key: "role", label: "Rol" },{ key: "status", label: "Estado" },{ key: "backlog", label: "Backlog", align: "right" },{ key: "chats", label: "Chats hoy", align: "right" },{ key: "csat", label: "CSAT", align: "right" },{ key: "progress", label: "Meta", align: "right" }]}
-              rows={agents.map((a) => {
-                const csatPct = Math.round(a.stats.satisfaction * 20);
-                const goalPct = Math.round(Math.min((a.stats.chatsToday / a.goals.chatsPerDay) * 100, 100));
-                return {
-                  agent: <span className="font-semibold">{a.name}</span>,
-                  role: <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${a.role === "admin" ? "text-red-400 bg-red-500/10" : a.role === "supervisor" ? "text-amber-400 bg-amber-500/10" : a.role === "agente" ? "text-blue-400 bg-blue-500/10" : "text-purple-400 bg-purple-500/10"}`}>{a.role}</span>,
-                  status: <span className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${a.active ? "bg-emerald-400" : "bg-gray-500"}`} /><span className={`text-[11px] ${t.textMuted}`}>{a.active ? "activo" : "inactivo"}</span></span>,
-                  backlog: <span className="font-bold">{a.stats.backlog}</span>,
-                  chats: <span className="font-bold">{a.stats.chatsToday}</span>,
-                  csat: <span className={`font-bold ${csatPct >= 90 ? "text-emerald-400" : csatPct >= 80 ? "text-amber-400" : "text-red-400"}`}>{csatPct}%</span>,
-                  progress: <span className={`font-bold ${goalPct >= 100 ? "text-emerald-400" : "text-amber-400"}`}>{goalPct}%</span>,
-                };
-              })}
-            />
-          </Card>
-        </div>
-      )}
+                  {(() => {
+                    const byEst: Record<string, { shifts: number; minutes: number; appts: number }> = {};
+                    shiftStats.forEach(s => {
+                      if (!byEst[s.employee_name]) byEst[s.employee_name] = { shifts: 0, minutes: 0, appts: 0 };
+                      byEst[s.employee_name].shifts  += parseInt(s.shifts);
+                      byEst[s.employee_name].minutes += parseInt(s.total_minutes);
+                      byEst[s.employee_name].appts   += parseInt(s.total_appointments);
+                    });
+                    return Object.entries(byEst).length === 0 ? (
+                      <div className="p-8 text-center text-sm" style={{ backgroundColor: t.colors.bgCard, color: t.colors.textFaint }}>
+                        Sin datos de turnos de estilistas aún
+                      </div>
+                    ) : (
+                      <div style={{ backgroundColor: t.colors.bgCard }}>
+                        {Object.entries(byEst).sort((a, b) => b[1].minutes - a[1].minutes).map(([name, st]) => (
+                          <div key={name} className="flex items-center gap-4 px-5 py-3"
+                            style={{ borderBottom: `1px solid ${t.colors.border}` }}>
+                            <div className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold text-white"
+                              style={{ backgroundColor: "#2E8B57" }}>
+                              {name.split(" ").map(p => p[0]).slice(0, 2).join("").toUpperCase()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate" style={{ color: t.colors.text }}>{name}</p>
+                              <div className="flex items-center gap-3 mt-0.5">
+                                <span className="text-[10px]" style={{ color: t.colors.textFaint }}>
+                                  {st.shifts} turno{st.shifts !== 1 ? "s" : ""}
+                                </span>
+                                <span className="text-[10px] font-semibold" style={{ color: "#2E8B57" }}>
+                                  {fmtMin(st.minutes)} en turno
+                                </span>
+                              </div>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <p className="text-lg font-bold" style={{ color: t.colors.text }}>{st.appts}</p>
+                              <p className="text-[9px]" style={{ color: t.colors.textFaint }}>citas</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
 
-      {/* ══════════ INTENTS ══════════ */}
-      {tab === "intents" && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <KPITile icon="🎯" label="Total Intenciones" value={topIntents.length.toString()} sub="detectadas por IA" />
-            <KPITile icon="📊" label="Mayor Volumen" value={topIntents[0]?.intent || ""} sub={`${topIntents[0]?.count || 0} casos`} accent />
-            <KPITile icon="🤖" label="Handoff IA" value={`${chatKPIs.handoffRate}%`} delta="-2%" sub="IA → humano" />
-            <KPITile icon="📈" label="Tendencia" value={topIntents.filter((x) => x.trend === "up").length.toString()} sub="intenciones creciendo" />
-          </div>
-          <Card>
-            <h3 className={`text-sm font-bold ${t.text} mb-1`}>🏆 Ranking de Intenciones</h3>
-            <p className={`text-[11px] ${t.textFaint} mb-4`}>Top intenciones detectadas por IA — ordenadas por volumen</p>
-            <HBarChart data={topIntents.slice(0, 10).map((intent, i) => ({
-              label: `${i + 1}. ${intent.intent}`, value: intent.count,
-              color: i === 0 ? "bg-gradient-to-r from-amber-500 to-amber-400" : i < 3 ? "bg-gradient-to-r from-blue-500 to-blue-400" : i < 6 ? "bg-gradient-to-r from-cyan-500 to-cyan-400" : "bg-gradient-to-r from-gray-500 to-gray-400",
-            }))} />
-          </Card>
-          <Card>
-            <h3 className={`text-sm font-bold ${t.text} mb-4`}>📋 Detalle de Intenciones</h3>
-            <DataTable
-              columns={[{ key: "rank", label: "#" },{ key: "intent", label: "Intención" },{ key: "count", label: "Volumen", align: "right" },{ key: "pct", label: "% del Total", align: "right" },{ key: "trend", label: "Tendencia", align: "right" }]}
-              rows={topIntents.map((intent, i) => {
-                const totalI = topIntents.reduce((s, x) => s + x.count, 0);
-                return {
-                  rank: <span className={`font-bold ${i < 3 ? t.accentText : t.textMuted}`}>{i + 1}</span>,
-                  intent: <span className="font-semibold">{intent.intent}</span>,
-                  count: <span className="font-bold">{intent.count.toLocaleString()}</span>,
-                  pct: <span>{((intent.count / totalI) * 100).toFixed(1)}%</span>,
-                  trend: <span className={`text-xs font-bold ${intent.trend === "up" ? "text-emerald-400" : intent.trend === "down" ? "text-red-400" : "text-gray-400"}`}>{intent.trend === "up" ? "▲ Subiendo" : intent.trend === "down" ? "▼ Bajando" : "— Estable"}</span>,
-                };
-              })}
-            />
-          </Card>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Card>
-              <h3 className={`text-sm font-bold ${t.text} mb-1`}>📈 Distribución de Tendencias</h3>
-              <p className={`text-[11px] ${t.textFaint} mb-4`}>Intenciones por dirección de tendencia</p>
-              <DonutChart label="intenciones" segments={[
-                { value: topIntents.filter((x) => x.trend === "up").length, color: "#10b981", label: "Creciendo" },
-                { value: topIntents.filter((x) => x.trend === "stable").length, color: "#6b7280", label: "Estable" },
-                { value: topIntents.filter((x) => x.trend === "down").length, color: "#ef4444", label: "Decreciendo" },
-              ]} />
-            </Card>
-            <Card>
-              <h3 className={`text-sm font-bold ${t.text} mb-1`}>⚡ Top 5 por Volumen</h3>
-              <p className={`text-[11px] ${t.textFaint} mb-4`}>Concentración de las principales intenciones</p>
-              <DonutChart label="total" segments={topIntents.slice(0, 5).map((intent, i) => ({
-                value: intent.count, color: ["#f59e0b","#3b82f6","#06b6d4","#8b5cf6","#ec4899"][i], label: intent.intent,
-              }))} />
-            </Card>
-          </div>
-        </div>
-      )}
+                {/* Productividad estilistas */}
+                <div className="rounded-2xl border overflow-hidden" style={{ borderColor: t.colors.border }}>
+                  <div className="px-5 py-3 border-b"
+                    style={{ backgroundColor: t.colors.bgCard, borderColor: t.colors.border }}>
+                    <h2 className="text-sm font-semibold" style={{ color: t.colors.text }}>
+                      💇 Productividad estilistas ({days}d)
+                    </h2>
+                  </div>
+                  {stylistProd.length === 0 ? (
+                    <div className="p-8 text-center text-sm" style={{ backgroundColor: t.colors.bgCard, color: t.colors.textFaint }}>
+                      Sin datos de productividad aún
+                    </div>
+                  ) : (
+                    <div style={{ backgroundColor: t.colors.bgCard }}>
+                      {(() => {
+                        const byS: Record<string, { total: number; days: number }> = {};
+                        stylistProd.forEach(p => {
+                          if (!byS[p.stylist_name]) byS[p.stylist_name] = { total: 0, days: 0 };
+                          byS[p.stylist_name].total += parseInt(p.appointments_completed || "0");
+                          byS[p.stylist_name].days  += 1;
+                        });
+                        return Object.entries(byS).sort((a, b) => b[1].total - a[1].total).map(([name, st]) => (
+                          <div key={name} className="flex items-center gap-4 px-5 py-3"
+                            style={{ borderBottom: `1px solid ${t.colors.border}` }}>
+                            <div className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold text-white"
+                              style={{ backgroundColor: "#8B3A4A" }}>
+                              {name.split(" ").map(p => p[0]).slice(0, 2).join("").toUpperCase()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate" style={{ color: t.colors.text }}>{name}</p>
+                              <p className="text-[10px]" style={{ color: t.colors.textFaint }}>
+                                {st.days} día{st.days !== 1 ? "s" : ""} · prom {(st.total / st.days).toFixed(1)}/día
+                              </p>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <p className="text-lg font-bold" style={{ color: t.colors.text }}>{st.total}</p>
+                              <p className="text-[9px]" style={{ color: t.colors.textFaint }}>citas atendidas</p>
+                            </div>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
 
-      <div className={`text-center py-4 border-t ${t.border}`}>
-        <p className={`text-[10px] ${t.textFaint}`}>📊 Shelie Business Intelligence — Datos actualizados cada 5 minutos</p>
-      </div>
+          {/* Histórico por día */}
+          {sessions.length > 0 && (
+            <div className="rounded-2xl border overflow-hidden" style={{ borderColor: t.colors.border }}>
+              <div className="px-5 py-3 border-b"
+                style={{ backgroundColor: t.colors.bgCard, borderColor: t.colors.border }}>
+                <h2 className="text-sm font-semibold" style={{ color: t.colors.text }}>
+                  📅 Detalle por día
+                </h2>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm" style={{ backgroundColor: t.colors.bgCard }}>
+                  <thead>
+                    <tr style={{ borderBottom: `1px solid ${t.colors.border}` }}>
+                      {["Fecha", "Agente", "Sesiones", "Tiempo conectado"].map(h => (
+                        <th key={h} className="text-left px-5 py-3 text-xs uppercase tracking-wider font-semibold"
+                          style={{ color: t.colors.textMuted }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sessions.map((s, i) => (
+                      <tr key={i} style={{ borderBottom: `1px solid ${t.colors.border}` }}>
+                        <td className="px-5 py-3 text-sm font-mono" style={{ color: t.colors.textMuted }}>
+                          {fmtDate(s.session_date)}
+                        </td>
+                        <td className="px-5 py-3">
+                          <p className="font-medium" style={{ color: t.colors.text }}>{s.user_name}</p>
+                          <p className="text-[10px]" style={{ color: t.colors.textFaint }}>{s.user_email}</p>
+                        </td>
+                        <td className="px-5 py-3 text-sm" style={{ color: t.colors.textMuted }}>
+                          {s.sessions}
+                        </td>
+                        <td className="px-5 py-3 font-semibold" style={{ color: t.colors.text }}>
+                          {fmtMin(parseInt(s.total_minutes))}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

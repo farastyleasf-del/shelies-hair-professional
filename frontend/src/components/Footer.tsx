@@ -3,7 +3,7 @@ import Image from "next/image";
 
 export default function Footer() {
   return (
-    <footer className="bg-vino text-white/70 mt-20">
+    <footer className="bg-vino text-white/70 border-t border-white/10">
       <div className="max-w-7xl mx-auto px-4 py-14 grid grid-cols-1 md:grid-cols-4 gap-10">
         {/* Brand */}
         <div>
@@ -64,22 +64,22 @@ export default function Footer() {
           <ul className="space-y-2 text-sm">
             <li>
               <a
+                href="https://wa.me/573042741979"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-rosa transition-colors"
+              >
+                WhatsApp: 304 274 1979
+              </a>
+            </li>
+            <li>
+              <a
                 href="https://wa.me/573246828585"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-rosa transition-colors"
               >
                 WhatsApp: 324 682 8585
-              </a>
-            </li>
-            <li>
-              <a
-                href="https://wa.me/573197933287"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-rosa transition-colors"
-              >
-                WhatsApp: 319 793 3287
               </a>
             </li>
             <li>

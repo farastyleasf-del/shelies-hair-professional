@@ -1,7 +1,8 @@
 "use client";
 import { useState } from "react";
-import { demoOrders, formatCOP } from "@/lib/data";
+import { formatCOP } from "@/lib/data";
 import { Order } from "@/lib/types";
+import { apiUrl } from "@/lib/api";
 
 const statusSteps: Record<string, number> = { pagado: 1, empacado: 2, enviado: 3, entregado: 4 };
 const statusLabels = ["Pagado", "Empacado", "Enviado", "Entregado"];
@@ -13,12 +14,11 @@ export default function MiPedidoPage() {
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
-    const q = query.trim().toLowerCase();
-    const order = demoOrders.find(
-      (o) => o.id.toLowerCase() === q || o.customer.email.toLowerCase() === q || o.customer.phone === q
-    );
-    setFound(order || null);
-    setSearched(true);
+    const q = query.trim();
+    fetch(apiUrl(`/api/orders/track?q=${encodeURIComponent(q)}`))
+      .then((r) => r.json())
+      .then((d) => { setFound(d?.id ? d : null); setSearched(true); })
+      .catch(() => { setFound(null); setSearched(true); });
   }
 
   return (

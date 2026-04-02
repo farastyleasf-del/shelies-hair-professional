@@ -217,7 +217,7 @@ export default function PerfilPage() {
         <div className={`mt-4 p-4 rounded-xl text-sm space-y-1 ${t.mode === "dark" ? "bg-white/3" : "bg-gray-50"} border ${t.border}`}>
           <p className={`font-medium ${t.text}`}>URL del Webhook para registrar en Meta:</p>
           <code className={`text-xs ${t.textMuted} break-all`}>
-            https://spa-eta-ten.vercel.app/api/whatsapp/webhook
+            https://shelies.asf.company/api/whatsapp/webhook
           </code>
           <p className={`text-xs ${t.textFaint} mt-2`}>
             Ir a Meta Business Manager → WhatsApp → Configuración → Webhooks → Editar

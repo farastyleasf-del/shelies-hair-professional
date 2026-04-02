@@ -6,7 +6,7 @@ export const metadata = {
 };
 
 const EMAIL = "sheilys16@gmail.com";
-const WA1 = "573246828585";
+const WA1 = "573042741979";
 const SUBJECT = encodeURIComponent("Solicitud de eliminación de datos personales");
 const BODY = encodeURIComponent(
   "Hola, solicito la eliminación de mis datos personales de los sistemas de Shelie's Hair Professional.\n\n" +

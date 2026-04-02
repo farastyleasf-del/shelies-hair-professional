@@ -1,11 +1,50 @@
 "use client";
 import { apiUrl } from "@/lib/api";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
+
+// ── DB types ──────────────────────────────────────────────────────────────────
+interface DBService {
+  id: number; title: string; type: string; duration: string | null;
+  price: number | null; icon: string | null; description: string;
+  highlights: string[]; image: string | null; before_image: string | null;
+  is_active: boolean;
+}
+
+function LazyVideo({ src, label }: { src: string; label: string }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const video = ref.current;
+    if (!video) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) { video.load(); video.play().catch(() => {}); }
+        else { video.pause(); video.currentTime = 0; }
+      },
+      { threshold: 0.25 }
+    );
+    observer.observe(video);
+    return () => observer.disconnect();
+  }, []);
+  return (
+    <div className="relative rounded-2xl overflow-hidden aspect-[9/16] bg-carbon group">
+      <video ref={ref} src={src} className="w-full h-full object-cover" loop muted playsInline preload="none" />
+      <div className="absolute inset-0 bg-gradient-to-t from-vino/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+      <div className="absolute bottom-4 left-0 right-0 text-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+        <span className="text-white text-xs font-semibold tracking-wide">{label}</span>
+      </div>
+      <div className="absolute inset-0 flex items-center justify-center group-hover:opacity-0 transition-opacity duration-200 pointer-events-none">
+        <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
+          <svg viewBox="0 0 24 24" fill="white" className="w-6 h-6 ml-0.5"><path d="M8 5v14l11-7z" /></svg>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 
-const WHATSAPP = "573246828585";
+const WHATSAPP = "573042741979";
 
 const ESTILISTAS = [
   {
@@ -29,15 +68,15 @@ const ESTILISTAS = [
 ];
 
 const SERVICIOS_MENU = [
-  "Alisado Orgánico Efecto Shelie's",
-  "Botox Capilar Canela",
-  "Terapia Total Scalp",
-  "Terapia de Reconstrucción",
-  "Repolarización — Cronograma Capilar",
-  "Nano Cristalización (+$50.000)",
-  "Corte Bordado (+$40.000)",
-  "Luz Fotónica / Infrarroja (+$40.000)",
-  "Terapia de Ozono (+$50.000)",
+  { name: "Alisado Orgánico Efecto Shelie's",      price: 350000 },
+  { name: "Botox Capilar Canela",                  price: 280000 },
+  { name: "Terapia Total Scalp",                   price: 220000 },
+  { name: "Terapia de Reconstrucción",             price: 200000 },
+  { name: "Repolarización — Cronograma Capilar",   price: 180000 },
+  { name: "Nano Cristalización (+$50.000)",        price: 50000  },
+  { name: "Corte Bordado (+$40.000)",              price: 40000  },
+  { name: "Luz Fotónica / Infrarroja (+$40.000)", price: 40000  },
+  { name: "Terapia de Ozono (+$50.000)",           price: 50000  },
 ];
 
 const TIME_SLOTS = [
@@ -256,13 +295,13 @@ function MiniCalendar({ selected, onSelect }: { selected: string | null; onSelec
 
 // ── BOOKING MODAL ─────────────────────────────────────────────────────────────
 
-type BData = { servicio: string; estilista: string; fecha: string | null; hora: string | null; nombre: string; telefono: string };
+type BData = { servicio: string; precio: number; estilista: string; fecha: string | null; hora: string | null; nombre: string; telefono: string; email: string };
 
-function BookingModal({ initial, onClose }: { initial?: string; onClose: () => void }) {
+function BookingModal({ initial, onClose, serviciosMenu }: { initial?: string; onClose: () => void; serviciosMenu?: { name: string; price: number }[] }) {
+  const MENU = serviciosMenu ?? SERVICIOS_MENU;
   const [step, setStep] = useState(1);
-  const [d, setD] = useState<BData>({ servicio: initial || "", estilista: "", fecha: null, hora: null, nombre: "", telefono: "" });
+  const [d, setD] = useState<BData>({ servicio: initial || "", precio: 0, estilista: "", fecha: null, hora: null, nombre: "", telefono: "", email: "" });
   const [submitting, setSubmitting] = useState(false);
-  const [confirmed, setConfirmed] = useState(false);
   const STEPS = 5;
 
   function fmtFecha(iso: string) {
@@ -273,41 +312,34 @@ function BookingModal({ initial, onClose }: { initial?: string; onClose: () => v
 
   async function handleConfirm() {
     setSubmitting(true);
-    const cita = {
-      id: `cita-${Date.now()}`,
-      servicio: d.servicio,
-      estilista: d.estilista,
-      fecha: d.fecha,
-      hora: d.hora,
-      nombre: d.nombre,
-      telefono: d.telefono,
-      estado: "confirmada",
-      creadoEn: new Date().toISOString(),
-    };
-    // Save to localStorage
     try {
-      const prev = JSON.parse(localStorage.getItem("shelies_citas") || "[]");
-      localStorage.setItem("shelies_citas", JSON.stringify([...prev, cita]));
-    } catch {}
-    // POST to API (best effort)
-    try {
-      await fetch(apiUrl("/api/appointments"), {
+      const res = await fetch(apiUrl("/api/appointments/create-preference"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          service_id: null,
-          stylist_id: null,
-          client_name: d.nombre,
+          servicio:     d.servicio,
+          estilista:    d.estilista,
+          fecha:        d.fecha,
+          hora:         d.hora,
+          client_name:  d.nombre,
           client_phone: d.telefono,
-          date: d.fecha,
-          time_slot: d.hora,
-          status: "confirmada",
-          notes: `Servicio: ${d.servicio} | Especialista: ${d.estilista}`,
+          client_email: d.email,
+          precio:       d.precio,
         }),
       });
-    } catch {}
-    setSubmitting(false);
-    setConfirmed(true);
+      const data = await res.json() as { init_point?: string; sandbox_init_point?: string; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Error al procesar");
+      // Redirigir a MercadoPago
+      const url = data.init_point ?? data.sandbox_init_point;
+      if (url) {
+        window.location.href = url;
+      } else {
+        throw new Error("No se recibió URL de pago");
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Error de conexión. Intenta de nuevo.");
+      setSubmitting(false);
+    }
   }
 
   function googleLink() {
@@ -347,7 +379,7 @@ function BookingModal({ initial, onClose }: { initial?: string; onClose: () => v
     if (step === 1) return !!d.servicio;
     if (step === 2) return !!d.estilista;
     if (step === 3) return !!d.fecha;
-    if (step === 4) return d.nombre.trim().length > 1 && d.telefono.replace(/\D/g, "").length >= 7;
+    if (step === 4) return d.nombre.trim().length > 1 && d.telefono.replace(/\D/g, "").length >= 7 && d.email.includes("@");
     return true;
   }
 
@@ -384,13 +416,17 @@ function BookingModal({ initial, onClose }: { initial?: string; onClose: () => v
             <div>
               <h3 className="font-poppins font-semibold text-base text-carbon mb-4">¿Qué servicio necesitas?</h3>
               <div className="space-y-2">
-                {SERVICIOS_MENU.map((s) => (
-                  <button key={s} onClick={() => setD((p) => ({ ...p, servicio: s }))}
+                {MENU.map((s) => (
+                  <button key={s.name} onClick={() => setD((p) => ({ ...p, servicio: s.name, precio: s.price }))}
                     className={`w-full text-left px-4 py-3 rounded-2xl border-2 text-sm font-medium transition-all ${
-                      d.servicio === s ? "border-fucsia bg-fucsia/5 text-fucsia" : "border-blush/60 text-carbon hover:border-rosa"
+                      d.servicio === s.name ? "border-fucsia bg-fucsia/5 text-fucsia" : "border-blush/60 text-carbon hover:border-rosa"
                     }`}>
-                    {d.servicio === s && <span className="mr-2 text-fucsia font-bold">✓</span>}
-                    {s}
+                    <div className="flex items-center justify-between">
+                      <span>{d.servicio === s.name && <span className="mr-2 text-fucsia font-bold">✓</span>}{s.name}</span>
+                      <span className={`text-xs font-semibold ml-2 flex-shrink-0 ${d.servicio === s.name ? "text-fucsia" : "text-humo"}`}>
+                        ${s.price.toLocaleString("es-CO")}
+                      </span>
+                    </div>
                   </button>
                 ))}
               </div>
@@ -472,68 +508,40 @@ function BookingModal({ initial, onClose }: { initial?: string; onClose: () => v
                   <label className={lbl}>Número WhatsApp</label>
                   <input value={d.telefono} onChange={(e) => setD((p) => ({ ...p, telefono: e.target.value }))}
                     placeholder="3XX XXX XXXX" type="tel" className={inp} />
-                  <p className="text-[11px] text-humo mt-1.5">Tu información es usada solo para la cita</p>
+                </div>
+                <div>
+                  <label className={lbl}>Email *</label>
+                  <input value={d.email} onChange={(e) => setD((p) => ({ ...p, email: e.target.value }))}
+                    placeholder="tu@email.com" type="email" className={inp} />
+                  <p className="text-[11px] text-humo mt-1.5">Necesario para el recibo de pago. Tu información es solo para la cita.</p>
                 </div>
               </div>
             </div>
           )}
 
-          {/* STEP 5 — Confirmación */}
+          {/* STEP 5 — Pago seña */}
           {step === 5 && (
             <div>
-              {confirmed ? (
-                <div>
-                  <div className="text-center mb-6">
-                    <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4"
-                      style={{ background: "linear-gradient(135deg,#D93879,#5E0B2B)" }}>
-                      <span className="text-4xl">🎉</span>
-                    </div>
-                    <h3 className="font-poppins font-bold text-2xl text-carbon">¡Cita Confirmada!</h3>
-                    <p className="text-sm text-humo mt-2 max-w-xs mx-auto">
-                      Te esperamos, <strong>{d.nombre.split(" ")[0]}</strong>. Guarda la cita en tu calendario.
-                    </p>
-                  </div>
-                  {/* Resumen compacto */}
-                  <div className="bg-blush-light rounded-2xl p-4 mb-5 space-y-2 text-sm">
-                    <p><span className="font-semibold text-humo">Servicio:</span> {d.servicio}</p>
-                    <p><span className="font-semibold text-humo">Especialista:</span> {d.estilista}</p>
-                    <p><span className="font-semibold text-humo">Fecha:</span> {d.fecha ? fmtFecha(d.fecha) : ""}</p>
-                    <p><span className="font-semibold text-humo">Hora:</span> {TIME_SLOTS.find(t => t.value === d.hora)?.label}</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 mb-4">
-                    <a href={googleLink()} target="_blank" rel="noopener noreferrer"
-                      className="flex items-center justify-center gap-2 bg-white border-2 border-blush text-carbon font-semibold py-3 rounded-xl text-xs hover:border-fucsia transition-colors">
-                      <span>📅</span> Google Calendar
-                    </a>
-                    <button onClick={downloadICS}
-                      className="flex items-center justify-center gap-2 bg-white border-2 border-blush text-carbon font-semibold py-3 rounded-xl text-xs hover:border-fucsia transition-colors">
-                      <span>🍎</span> Apple / Outlook
-                    </button>
-                  </div>
-                  <button onClick={onClose}
-                    className="w-full py-3 rounded-2xl border-2 border-blush text-carbon font-semibold text-sm hover:border-fucsia transition-colors">
-                    Cerrar
-                  </button>
-                </div>
-              ) : submitting ? (
-                <div className="flex items-center justify-center py-16">
+              {submitting ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-3">
                   <div className="w-10 h-10 rounded-full border-4 border-blush border-t-fucsia animate-spin" />
+                  <p className="text-sm text-humo">Preparando tu pago...</p>
                 </div>
               ) : (
                 <div>
                   <div className="text-center mb-6">
                     <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3"
                       style={{ background: "linear-gradient(135deg,#D93879,#5E0B2B)" }}>
-                      <span className="text-3xl">🎉</span>
+                      <span className="text-3xl">💳</span>
                     </div>
                     <h3 className="font-poppins font-bold text-xl text-carbon">¡Listo, {d.nombre.split(" ")[0]}!</h3>
                     <p className="text-sm text-humo mt-1 max-w-xs mx-auto">
-                      Revisa el resumen y confirma tu cita.
+                      Revisa el resumen y paga la seña para confirmar tu cita.
                     </p>
                   </div>
 
                   {/* Resumen */}
-                  <div className="bg-blush-light rounded-2xl p-5 mb-6 space-y-3">
+                  <div className="bg-blush-light rounded-2xl p-5 mb-4 space-y-3">
                     {[
                       { label: "Servicio",     value: d.servicio },
                       { label: "Especialista", value: d.estilista },
@@ -547,14 +555,30 @@ function BookingModal({ initial, onClose }: { initial?: string; onClose: () => v
                     ))}
                   </div>
 
+                  {/* Desglose de pago */}
+                  <div className="bg-vino/5 border border-vino/20 rounded-2xl p-4 mb-6 space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-humo">Valor del servicio</span>
+                      <span className="font-medium text-carbon">${d.precio.toLocaleString("es-CO")}</span>
+                    </div>
+                    <div className="flex justify-between text-sm font-semibold border-t border-vino/20 pt-2 mt-2">
+                      <span className="text-vino">Seña a pagar ahora</span>
+                      <span className="text-vino">$30.000</span>
+                    </div>
+                    <p className="text-[11px] text-humo mt-1">El resto se paga el día de tu cita.</p>
+                  </div>
+
                   <button
                     onClick={handleConfirm}
                     disabled={submitting}
                     className="w-full flex items-center justify-center gap-3 text-white font-poppins font-bold py-4 rounded-2xl text-sm shadow-lg hover:opacity-90 transition-opacity disabled:opacity-60"
                     style={{ background: "linear-gradient(135deg,#D93879,#5E0B2B)" }}
                   >
-                    <span className="text-xl">✅</span>
-                    Confirmar mi cita
+                    {submitting ? (
+                      <><span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />Procesando...</>
+                    ) : (
+                      <><span className="text-xl">💳</span>Pagar seña con MercadoPago</>
+                    )}
                   </button>
                 </div>
               )}
@@ -596,6 +620,26 @@ function BookingModal({ initial, onClose }: { initial?: string; onClose: () => v
 export default function ServiciosPage() {
   const [booking, setBooking] = useState<{ open: boolean; initial?: string }>({ open: false });
   const open = (initial?: string) => setBooking({ open: true, initial });
+
+  const [dbProcesos, setDbProcesos] = useState<DBService[] | null>(null);
+  const [dbAdicionales, setDbAdicionales] = useState<DBService[] | null>(null);
+  const [menuServicios, setMenuServicios] = useState(SERVICIOS_MENU);
+
+  useEffect(() => {
+    fetch(apiUrl("/api/services"))
+      .then((r) => r.json())
+      .then((d: { success: boolean; data: DBService[] }) => {
+        if (d.success) {
+          setDbProcesos(d.data.filter((s) => s.type === "proceso" && s.is_active));
+          setDbAdicionales(d.data.filter((s) => s.type === "adicional" && s.is_active));
+          const allServices = d.data.filter((s) => s.is_active && s.price);
+          if (allServices.length > 0) {
+            setMenuServicios(allServices.map((s) => ({ name: s.title, price: s.price! })));
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   return (
     <div className="bg-blush-light min-h-screen pb-20 sm:pb-0">
@@ -662,22 +706,49 @@ export default function ServiciosPage() {
         </div>
 
         <div className="space-y-12">
-          {procesosCapilares.map((s, i) => (
+          {(dbProcesos
+            ? dbProcesos.map((s) => ({
+                id: s.id.toString(),
+                title: s.title,
+                tagline: "",
+                description: s.description,
+                image: s.image ?? "/images/services/resultado-3.jpg",
+                before: s.before_image ?? undefined,
+                highlights: s.highlights,
+                duration: s.duration ?? "",
+              }))
+            : procesosCapilares
+          ).map((s, i) => {
+            const imgSrc = s.image ?? "/images/services/resultado-3.jpg";
+            const beforeSrc = s.before ?? undefined;
+            const isAbsoluteImg = imgSrc.startsWith("http") || imgSrc.startsWith("/uploads");
+            const isAbsoluteBefore = beforeSrc && (beforeSrc.startsWith("http") || beforeSrc.startsWith("/uploads"));
+            return (
             <div
               key={s.id}
               className={`card-premium overflow-hidden flex flex-col ${i % 2 === 0 ? "md:flex-row" : "md:flex-row-reverse"}`}
             >
               {/* Imagen */}
               <div className="relative w-full md:w-[42%] flex-shrink-0 min-h-[300px] sm:min-h-[360px]">
-                <Image src={s.image} alt={s.title} fill className="object-cover" sizes="(max-width:768px) 100vw,42vw" />
+                {isAbsoluteImg ? (
+                  <img src={imgSrc} alt={s.title} className="absolute inset-0 w-full h-full object-cover" loading={i === 0 ? "eager" : "lazy"} />
+                ) : (
+                  <Image src={imgSrc} alt={s.title} fill className="object-cover" sizes="(max-width:768px) 100vw,42vw" loading={i === 0 ? "eager" : "lazy"} />
+                )}
                 {/* Duration */}
-                <div className="absolute top-4 left-4 bg-carbon/75 backdrop-blur-sm text-white text-[11px] font-bold px-3 py-1.5 rounded-full tracking-wide">
-                  ⏱ {s.duration}
-                </div>
+                {s.duration && (
+                  <div className="absolute top-4 left-4 bg-carbon/75 backdrop-blur-sm text-white text-[11px] font-bold px-3 py-1.5 rounded-full tracking-wide">
+                    ⏱ {s.duration}
+                  </div>
+                )}
                 {/* Before thumbnail — solo cuando es diferente de la imagen principal */}
-                {s.before && (
+                {beforeSrc && (
                   <div className="absolute bottom-4 left-4 w-[72px] h-[88px] rounded-xl overflow-hidden border-2 border-white shadow-xl">
-                    <Image src={s.before} alt="Antes" fill className="object-cover object-top" sizes="72px" />
+                    {isAbsoluteBefore ? (
+                      <img src={beforeSrc} alt="Antes" className="absolute inset-0 w-full h-full object-cover object-top" loading="lazy" />
+                    ) : (
+                      <Image src={beforeSrc} alt="Antes" fill className="object-cover object-top" sizes="72px" loading="lazy" />
+                    )}
                     <div className="absolute inset-0 bg-carbon/50 flex items-end justify-center pb-1.5">
                       <span className="text-white text-[9px] font-bold uppercase tracking-wider">Antes</span>
                     </div>
@@ -687,7 +758,7 @@ export default function ServiciosPage() {
 
               {/* Contenido */}
               <div className="flex-1 p-7 sm:p-9 flex flex-col justify-center">
-                <p className="text-fucsia text-[11px] font-bold uppercase tracking-[0.2em] mb-2">{s.tagline}</p>
+                {s.tagline && <p className="text-fucsia text-[11px] font-bold uppercase tracking-[0.2em] mb-2">{s.tagline}</p>}
                 <h3 className="font-poppins font-bold text-2xl text-carbon mb-3">{s.title}</h3>
                 <p className="text-humo text-sm leading-relaxed mb-5">{s.description}</p>
                 <ul className="space-y-2.5 mb-7">
@@ -704,7 +775,8 @@ export default function ServiciosPage() {
                 </button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* ── ADICIONALES ── */}
@@ -716,7 +788,18 @@ export default function ServiciosPage() {
             <p className="text-humo text-sm mt-2 pl-5">Potencia cualquier proceso con estas terapias complementarias</p>
           </div>
           <div className="grid sm:grid-cols-2 gap-5">
-            {adicionales.map((a) => (
+            {(dbAdicionales
+              ? dbAdicionales.map((s) => ({
+                  id: s.id.toString(),
+                  title: s.title,
+                  icon: s.icon ?? "✨",
+                  price: s.price ? "$" + s.price.toLocaleString("es-CO") : "",
+                  description: s.description,
+                  from: "#D93879",
+                  to: "#5E0B2B",
+                }))
+              : adicionales
+            ).map((a) => (
               <div key={a.id} className="rounded-2xl p-6 text-white relative overflow-hidden"
                 style={{ background: `linear-gradient(135deg, ${a.from}, ${a.to})` }}>
                 {/* Decorative circle */}
@@ -724,11 +807,11 @@ export default function ServiciosPage() {
                 <div className="relative">
                   <div className="flex items-start justify-between mb-3">
                     <span className="text-3xl">{a.icon}</span>
-                    <span className="text-sm font-bold bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full">{a.price}</span>
+                    {a.price && <span className="text-sm font-bold bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full">{a.price}</span>}
                   </div>
                   <h3 className="font-poppins font-bold text-lg mb-2">{a.title}</h3>
                   <p className="text-white/75 text-sm leading-relaxed mb-5">{a.description}</p>
-                  <button onClick={() => open(`${a.title} (${a.price})`)}
+                  <button onClick={() => open(`${a.title}${a.price ? " (" + a.price + ")" : ""}`)}
                     className="text-xs bg-white/20 hover:bg-white/30 border border-white/30 px-5 py-2 rounded-full font-semibold transition-colors">
                     Añadir a mi cita →
                   </button>
@@ -752,26 +835,7 @@ export default function ServiciosPage() {
               { src: "/videos/reel-4.mp4", label: "Alisado orgánico Shelie's" },
               { src: "/videos/reel-5.mp4", label: "Resultados garantizados" },
             ].map((reel) => (
-              <div key={reel.src} className="relative rounded-2xl overflow-hidden aspect-[9/16] bg-carbon group">
-                <video
-                  src={reel.src}
-                  className="w-full h-full object-cover"
-                  loop muted playsInline
-                  onMouseEnter={(e) => (e.currentTarget as HTMLVideoElement).play()}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLVideoElement).pause(); (e.currentTarget as HTMLVideoElement).currentTime = 0; }}
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-vino/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-                <div className="absolute bottom-4 left-0 right-0 text-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
-                  <span className="text-white text-xs font-semibold tracking-wide">{reel.label}</span>
-                </div>
-                <div className="absolute inset-0 flex items-center justify-center group-hover:opacity-0 transition-opacity duration-200 pointer-events-none">
-                  <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" className="w-6 h-6 ml-0.5">
-                      <path d="M8 5v14l11-7z" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
+              <LazyVideo key={reel.src} src={reel.src} label={reel.label} />
             ))}
           </div>
         </div>
@@ -813,7 +877,7 @@ export default function ServiciosPage() {
       </div>
 
       {/* Modal */}
-      {booking.open && <BookingModal initial={booking.initial} onClose={() => setBooking({ open: false })} />}
+      {booking.open && <BookingModal initial={booking.initial} onClose={() => setBooking({ open: false })} serviciosMenu={menuServicios} />}
     </div>
   );
 }

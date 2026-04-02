@@ -102,21 +102,31 @@ router.post("/create-preference", async (req: Request, res: Response) => {
     // Guardar pedido en DB con estado "pendiente"
     try {
       const total = body.items.reduce((s, i) => s + i.unit_price * i.quantity, 0);
+      const clientName = `${body.payer.name} ${body.payer.surname ?? ""}`.trim();
+      const clientAddress = body.shipping_address
+        ? `${body.shipping_address.street_name}, ${body.shipping_address.city}`
+        : "";
       await query(
-        `INSERT INTO shelies.orders
-           (external_reference, status, total, items_json, payer_json, created_at)
-         VALUES ($1, $2, $3, $4, $5, NOW())
-         ON CONFLICT (external_reference) DO NOTHING`,
+        `INSERT INTO bbdd_shelies.orders
+           (order_number, client_name, client_phone, client_email, client_address,
+            items, subtotal, discount, total, status, payment_method, notes, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, 'pendiente', 'mercadopago', $10, NOW())
+         ON CONFLICT (order_number) DO NOTHING`,
         [
           orderId,
-          "pendiente",
-          total,
+          clientName,
+          body.payer.phone ?? "",
+          body.payer.email,
+          clientAddress,
           JSON.stringify(body.items),
-          JSON.stringify(body.payer),
+          total,
+          0,
+          total,
+          body.notes ?? "",
         ]
       );
-    } catch {
-      // Si la tabla de orders no tiene esas columnas, ignoramos el error
+    } catch (dbErr) {
+      console.warn("[MP create-preference] DB insert failed:", dbErr);
     }
 
     res.json({
@@ -159,18 +169,41 @@ router.post("/webhook", async (req: Request, res: Response) => {
 
     console.log(`[MP webhook] payment ${paymentId} | order ${orderId} | status ${status}`);
 
-    // Actualizar estado del pedido en DB
+    // Actualizar estado en DB según tipo de referencia
     if (orderId) {
       try {
-        await query(
-          `UPDATE shelies.orders
-           SET status = $1, mp_payment_id = $2, updated_at = NOW()
-           WHERE external_reference = $3`,
-          [status === "approved" ? "pagado" : status ?? "desconocido", paymentId, orderId]
-        );
-      } catch {
-        // Si la tabla no tiene esas columnas, log sin error crítico
-        console.warn("[MP webhook] No se pudo actualizar DB:", orderId);
+        if (orderId.startsWith("cita-")) {
+          // Es una seña de cita — actualizar appointments
+          const newApptStatus    = status === "approved" ? "confirmada" : "pendiente_pago";
+          const newDepositStatus = status ?? "pendiente";
+          await query(
+            `UPDATE bbdd_shelies.appointments
+             SET status = $1, deposit_status = $2, payment_ref = $3, updated_at = NOW()
+             WHERE payment_ref = $4`,
+            [newApptStatus, newDepositStatus, paymentId, orderId]
+          );
+          // También actualizar en orders
+          try {
+            const newOrderStatus = status === "approved" ? "pagado" : "pendiente";
+            await query(
+              `UPDATE bbdd_shelies.orders
+               SET status = $1, payment_ref = $2, updated_at = NOW()
+               WHERE order_number = $3`,
+              [newOrderStatus, paymentId, orderId]
+            );
+          } catch { /* si no existe en orders no es crítico */ }
+        } else {
+          // Es un pedido de tienda
+          const newStatus = status === "approved" ? "pagado" : status ?? "pendiente";
+          await query(
+            `UPDATE bbdd_shelies.orders
+             SET status = $1, payment_ref = $2, updated_at = NOW()
+             WHERE order_number = $3`,
+            [newStatus, paymentId, orderId]
+          );
+        }
+      } catch (dbErr) {
+        console.warn("[MP webhook] No se pudo actualizar DB:", orderId, dbErr);
       }
     }
   } catch (err) {

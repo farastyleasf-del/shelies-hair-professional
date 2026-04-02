@@ -1,5 +1,5 @@
 "use client";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, authedFetch } from "@/lib/api";
 import { useState, useEffect } from "react";
 import { useAdminTheme } from "@/lib/admin-theme";
 
@@ -49,7 +49,7 @@ export default function AdminCitas() {
       setCitas(stored);
     } catch {}
     // Also fetch from API
-    fetch(apiUrl("/api/appointments"))
+    authedFetch(apiUrl("/api/appointments"))
       .then(r => r.json())
       .then(data => {
         if (data.success && data.data?.length) {

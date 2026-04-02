@@ -162,6 +162,7 @@ export interface Template {
   category: string;
   text: string;
   variables: string[];
+  imageUrl?: string; // ruta pública (solo para plantillas de QR/imagen)
 }
 
 /* ── Reglas de asignación ── */

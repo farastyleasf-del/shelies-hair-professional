@@ -1,0 +1,51 @@
+version: "3.9"
+
+services:
+  shelie_spa_back:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: shelie_spa_back
+    restart: always
+    env_file:
+      - ./.env
+    ports:
+      - "5015:3001"
+    volumes:
+      - ./uploads:/app/uploads
+    networks:
+      - proxy
+
+  shelie_spa_nextjs:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: shelie_spa_nextjs
+    restart: always
+    expose:
+      - "3000"
+    depends_on:
+      - shelie_spa_back
+    networks:
+      - internal
+
+  shelie_spa_front:
+    image: nginx:alpine
+    container_name: shelie_spa_front
+    restart: always
+    expose:
+      - "3000"
+    volumes:
+      - ./frontend/public:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - shelie_spa_nextjs
+    networks:
+      - proxy
+      - internal
+
+networks:
+  proxy:
+    external: true
+  internal:
+    driver: bridge

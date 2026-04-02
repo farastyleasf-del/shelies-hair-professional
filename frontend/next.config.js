@@ -2,9 +2,24 @@
 const nextConfig = {
   images: {
     formats: ["image/webp", "image/avif"],
-    domains: ["images.unsplash.com", "via.placeholder.com"],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920],
     imageSizes: [16, 32, 48, 64, 96, 128, 256],
+    remotePatterns: [
+      { protocol: "https", hostname: "shelies.asf.company" },
+      { protocol: "http",  hostname: "localhost" },
+    ],
+  },
+  async rewrites() {
+    return [
+      {
+        source: "/api/:path*",
+        destination: "https://shelies.asf.company/api/:path*",
+      },
+      {
+        source: "/uploads/:path*",
+        destination: "https://shelies.asf.company/uploads/:path*",
+      },
+    ];
   },
 };
 

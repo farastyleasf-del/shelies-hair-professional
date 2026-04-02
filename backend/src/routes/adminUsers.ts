@@ -4,6 +4,7 @@ import {
   createAdminUser, updateAdminUser, deleteAdminUser,
   verifyAdminCredentials,
 } from "../lib/admin-users-db";
+import { signToken } from "../middleware/auth";
 
 const router = Router();
 
@@ -20,7 +21,8 @@ router.post("/auth", async (req: Request, res: Response) => {
       res.status(401).json({ error: "Credenciales incorrectas" });
       return;
     }
-    res.json({ ok: true, user });
+    const token = signToken({ id: user.id, email: user.email, name: user.name, role: user.role, avatar: user.avatar });
+    res.json({ ok: true, user, token });
   } catch (err) {
     console.error("[admin/auth]", err);
     res.status(503).json({ error: "Error de conexión" });

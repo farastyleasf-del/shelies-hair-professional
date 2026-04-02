@@ -1,64 +1,10 @@
 "use client";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, authedFetch } from "@/lib/api";
 import { useState, useEffect, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { alerts as alertsData } from "@/lib/admin-data";
 import { AdminThemeProvider, useAdminTheme } from "@/lib/admin-theme";
 
-const ADMIN_CREDENTIALS = { email: "admin@shelie.com", password: "shelie2026" };
-
-/* ── Alert Bar ── */
-function AlertBar() {
-  const t = useAdminTheme();
-  const [dismissed, setDismissed] = useState<string[]>([]);
-  const active = alertsData.filter((a) => !dismissed.includes(a.id));
-  const [current, setCurrent] = useState(0);
-
-  useEffect(() => {
-    if (active.length <= 1) return;
-    const timer = setInterval(() => setCurrent((c) => (c + 1) % active.length), 5000);
-    return () => clearInterval(timer);
-  }, [active.length]);
-
-  if (active.length === 0) return null;
-  const al = active[current % active.length];
-  if (!al) return null;
-
-  const alertStyles = {
-    danger: {
-      bg: t.mode === "dark" ? t.colors.dangerLight : "#FEF2F2",
-      border: t.mode === "dark" ? t.colors.danger + "4D" : "#FECACA",
-      text: t.mode === "dark" ? t.colors.dangerText : "#991B1B",
-    },
-    warning: {
-      bg: t.mode === "dark" ? t.colors.warningLight : "#FFFBEB",
-      border: t.mode === "dark" ? t.colors.warning + "4D" : "#FDE68A",
-      text: t.mode === "dark" ? t.colors.warningText : "#92400E",
-    },
-    info: {
-      bg: t.mode === "dark" ? t.colors.infoLight : "#EFF6FF",
-      border: t.mode === "dark" ? t.colors.info + "4D" : "#BFDBFE",
-      text: t.mode === "dark" ? t.colors.infoText : "#1E40AF",
-    },
-  };
-
-  const style = alertStyles[al.type];
-  const iconMap: Record<string, string> = { danger: "🚨", warning: "⚠️", info: "ℹ️" };
-
-  return (
-    <div
-      className="flex items-center gap-3 px-4 py-3 border rounded-lg text-sm transition-colors mb-4"
-      style={{ backgroundColor: style.bg, borderColor: style.border, color: style.text }}
-    >
-      <span className="text-lg">{iconMap[al.type]}</span>
-      <span className="font-semibold">{al.title}</span>
-      <span className="opacity-80 truncate">— {al.description}</span>
-      <span className="ml-auto opacity-60 flex-shrink-0 text-xs">{active.length > 1 && `${(current % active.length) + 1}/${active.length}`}</span>
-      <button onClick={() => setDismissed((d) => [...d, al.id])} className="ml-2 opacity-60 hover:opacity-100 flex-shrink-0 transition-opacity">✕</button>
-    </div>
-  );
-}
 
 /* ── Theme Toggle Button (Grande y Visible) ── */
 function ThemeToggle() {
@@ -101,6 +47,7 @@ function AdminSidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: (
     { href: "/admin/productos", label: "Productos" },
     { href: "/admin/servicios", label: "Servicios" },
     { href: "/admin/equipo", label: "Equipo" },
+    { href: "/admin/estilistas", label: "HC Equipo" },
     { href: "/admin/usuarios", label: "Usuarios" },
     { href: "/admin/reportes", label: "Reportes" },
     { href: "/admin/configuracion", label: "Config" },
@@ -210,33 +157,22 @@ function LoginForm({ onLogin }: { onLogin: (user?: { name: string; avatar: strin
     setError("");
     try {
       // Intentar verificar por API (DB)
-      const res = await fetch(apiUrl("/api/admin/auth"), {
+      const res = await authedFetch(apiUrl("/api/admin/auth"), {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
       if (res.ok) {
-        const data = await res.json() as { user: { name: string; avatar: string; role: string } };
+        const data = await res.json() as { user: { name: string; avatar: string; role: string }; token?: string };
         sessionStorage.setItem("admin_auth", "true");
         sessionStorage.setItem("admin_user", JSON.stringify(data.user));
+        if (data.token) sessionStorage.setItem("admin_token", data.token);
         localStorage.setItem("shelie_agent_name", data.user.name);
         onLogin(data.user);
         return;
       }
-      // Fallback local si API no disponible
-      if (email === ADMIN_CREDENTIALS.email && password === ADMIN_CREDENTIALS.password) {
-        sessionStorage.setItem("admin_auth", "true");
-        onLogin({ name: "Shelie Admin", avatar: "💎", role: "admin" });
-        return;
-      }
       setError("Credenciales incorrectas");
     } catch {
-      // Sin conexión: fallback hardcoded
-      if (email === ADMIN_CREDENTIALS.email && password === ADMIN_CREDENTIALS.password) {
-        sessionStorage.setItem("admin_auth", "true");
-        onLogin({ name: "Shelie Admin", avatar: "💎", role: "admin" });
-      } else {
-        setError("Credenciales incorrectas");
-      }
+      setError("Sin conexión con el servidor");
     } finally {
       setLoading(false);
     }
@@ -283,9 +219,6 @@ function LoginForm({ onLogin }: { onLogin: (user?: { name: string; avatar: strin
             {loading ? "Verificando..." : "Iniciar Sesión"}
           </button>
         </form>
-        <p className="text-xs text-[#6B6B6B] text-center mt-6">
-          Demo: admin@shelie.com / shelie2026
-        </p>
       </div>
     </div>
   );
@@ -341,7 +274,6 @@ function AdminLayoutInner({ children }: { children: ReactNode }) {
 
         {/* Content */}
         <div className="flex-1 p-4 md:p-6 overflow-auto">
-          <AlertBar />
           {children}
         </div>
       </div>
