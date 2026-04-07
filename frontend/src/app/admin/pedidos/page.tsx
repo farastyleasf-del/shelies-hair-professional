@@ -12,7 +12,7 @@ const statusSpecial: OrderStatus[] = ["devuelto", "cancelado", "incidencia"];
 const allStatuses = [...statusFlow, ...statusSpecial];
 
 const statusEmoji: Record<string, string> = {
-  nuevo: "🆕", pagado: "💳", empacado: "📦", enviado: "🚚", entregado: "✅",
+  nuevo: "🆕", pagado: "💳", empacado: "📦", alistamiento: "📋", enviado: "🚚", entregado: "✅",
   devuelto: "↩️", cancelado: "❌", incidencia: "⚠️",
 };
 

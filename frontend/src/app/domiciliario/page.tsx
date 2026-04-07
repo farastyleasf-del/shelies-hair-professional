@@ -73,11 +73,12 @@ export default function DomiciliarioDashboard() {
       setLoading(true);
       try {
         const [pendRes, delivRes] = await Promise.all([
-          domiciliarioFetch(apiUrl("/api/orders?status=enviado")),
+          domiciliarioFetch(apiUrl("/api/orders?limit=200")),
           domiciliarioFetch(apiUrl("/api/orders?status=entregado&today=true")),
         ]);
-        const pendData: Order[] = pendRes.ok ? await pendRes.json() : [];
+        const allData: Order[] = pendRes.ok ? await pendRes.json() : [];
         const delivData: Order[] = delivRes.ok ? await delivRes.json() : [];
+        const pendData = allData.filter(o => ["nuevo", "pagado", "empacado", "alistamiento", "enviado", "en_ruta"].includes(o.status));
         setPending(pendData);
         setDeliveredToday(delivData);
       } catch {

@@ -94,9 +94,6 @@ function LoginEstilista({ onLogin }: { onLogin: (u: StylistUser) => void }) {
     if (!cedula || !password) return;
     setLoading(true); setError("");
 
-    const norm = (s: string) =>
-      s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-
     try {
       // Validar contra el backend (la contraseña se verifica en el servidor)
       const authRes = await stylistFetch(apiUrl("/api/employees/auth"), {
@@ -104,33 +101,9 @@ function LoginEstilista({ onLogin }: { onLogin: (u: StylistUser) => void }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: cedula.trim(), password }),
       });
-      if (authRes.status === 401) { setError("Contraseña incorrecta"); return; }
-      if (authRes.status === 403) { setError("Empleado inactivo"); return; }
-      if (!authRes.ok) {
-        // Fallback: si el backend falla, intentar match local (solo para desarrollo)
-        const listRes = await stylistFetch(apiUrl("/api/employees?_=" + Date.now()));
-        if (!listRes.ok) { setError("Sin conexión al servidor"); return; }
-        const emps: StylistUser[] = await listRes.json().catch(() => []);
-        if (!emps.length) { setError("Sin conexión al servidor"); return; }
-
-        const raw = cedula.trim();
-        const dotIdx = raw.indexOf(".");
-        let match: StylistUser | undefined;
-        if (dotIdx > 0) {
-          const firstName    = norm(raw.slice(0, dotIdx));
-          const firstSurname = norm(raw.slice(dotIdx + 1));
-          match = emps.find(emp => {
-            if (emp.status !== "activo") return false;
-            const parts = norm(emp.name).split(/\s+/);
-            const pNombre   = parts[0];
-            const pApellido = parts.length >= 4 ? parts[2] : parts[1] ?? "";
-            return pNombre === firstName && pApellido === firstSurname;
-          });
-        }
-        if (!match) { setError("Usuario no encontrado. Usa el formato: nombre.apellido"); return; }
-        onLogin(match);
-        return;
-      }
+      if (authRes.status === 401) { setError("Usuario o contraseña incorrectos"); return; }
+      if (authRes.status === 403) { setError("Usuario inactivo"); return; }
+      if (!authRes.ok) { setError("Error del servidor"); return; }
 
       const data = await authRes.json() as { employee: StylistUser; token?: string };
       if (!data.employee) { setError("Usuario no encontrado"); return; }
@@ -300,7 +273,11 @@ function EstilistaShell({ children, user, onLogout }: { children: ReactNode; use
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen]       = useState(false);
   const [shiftStartedAt, setShiftStartedAt] = useState<string | null>(null);
+  const [shiftEndedAt, setShiftEndedAt]   = useState<string | null>(null);
+  const [shiftEnded, setShiftEnded]       = useState(false);
+  const [shiftStartedAtLog, setShiftStartedAtLog] = useState<string | null>(null); // For display when ended
   const [shiftLoading, setShiftLoading]   = useState(false);
+  const [confirmAction, setConfirmAction] = useState<"start" | "end" | null>(null);
   const [isMobile, setIsMobile]           = useState(true);
   const [sidebarHidden, setSidebarHidden] = useState(false);
 
@@ -313,37 +290,67 @@ function EstilistaShell({ children, user, onLogout }: { children: ReactNode; use
 
   useEffect(() => { setDrawerOpen(false); }, [pathname]);
 
-  // Load active shift
+  // Load shift state for today
   useEffect(() => {
     if (!user?.id) return;
+    // Check active shift
     stylistFetch(apiUrl(`/api/stylist/shifts/active/${user.id}`))
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.started_at) setShiftStartedAt(d.started_at); })
       .catch(() => {});
+    // Check if already ended today
+    stylistFetch(apiUrl("/api/stylist/shifts/today"))
+      .then(r => r.ok ? r.json() : [])
+      .then((shifts: Array<{ employee_id?: number; ended_at: string | null; started_at: string }>) => {
+        const mine = shifts.filter(s => Number(s.employee_id) === user.id);
+        const active = mine.find(s => !s.ended_at);
+        const ended = mine.find(s => !!s.ended_at);
+        if (!active && ended) {
+          setShiftEnded(true);
+          setShiftStartedAt(null);
+          setShiftStartedAtLog(ended.started_at);
+          setShiftEndedAt(ended.ended_at);
+        }
+      })
+      .catch(() => {});
   }, [user?.id]);
 
-  async function handleShift() {
+  function fmtTime(iso: string | null) {
+    if (!iso) return "--:--";
+    return new Date(iso).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  async function handleStartShift() {
     setShiftLoading(true);
     try {
-      if (shiftStartedAt) {
-        await stylistFetch(apiUrl("/api/stylist/shifts/end"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ employeeId: user.id }),
-        });
-        setShiftStartedAt(null);
-      } else {
-        const r = await stylistFetch(apiUrl("/api/stylist/shifts/start"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ employeeId: user.id, employeeName: user.name, employeeEmail: user.email }),
-        });
-        if (r.ok) {
-          const d = await r.json();
-          setShiftStartedAt(d.started_at ?? new Date().toISOString());
-        }
+      const r = await stylistFetch(apiUrl("/api/stylist/shifts/start"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employeeId: user.id, employeeName: user.name, employeeEmail: user.email }),
+      });
+      if (r.ok) {
+        const d = await r.json();
+        setShiftStartedAt(d.started_at ?? new Date().toISOString());
       }
-    } catch {} finally { setShiftLoading(false); }
+    } catch {} finally { setShiftLoading(false); setConfirmAction(null); }
+  }
+
+  async function handleEndShift() {
+    setShiftLoading(true);
+    try {
+      const r = await stylistFetch(apiUrl("/api/stylist/shifts/end"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employeeId: user.id }),
+      });
+      if (r.ok) {
+        const d = await r.json();
+        setShiftStartedAtLog(shiftStartedAt);
+        setShiftEndedAt(d.ended_at ?? new Date().toISOString());
+        setShiftStartedAt(null);
+        setShiftEnded(true);
+      }
+    } catch {} finally { setShiftLoading(false); setConfirmAction(null); }
   }
 
   const firstName = user.name.split(" ")[0];
@@ -474,31 +481,50 @@ function EstilistaShell({ children, user, onLogout }: { children: ReactNode; use
 
             {/* Shift + Logout */}
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              {/* Shift button */}
-              <button
-                onClick={handleShift}
-                disabled={shiftLoading}
-                style={{
-                  display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 20, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, transition: "opacity .15s",
-                  background: shiftStartedAt ? P.vinoLight : P.doradoLight,
-                  color: shiftStartedAt ? P.vinoDeep : P.doradoDeep,
-                  opacity: shiftLoading ? 0.6 : 1,
-                }}
-              >
-                {shiftStartedAt ? (
-                  <>
-                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#22C55E", animation: "pulse-dot 2s ease-in-out infinite", flexShrink: 0 }}/>
-                    <ShiftTimer startedAt={shiftStartedAt} />&nbsp;· Fin turno
-                  </>
-                ) : (
-                  <>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-                    </svg>
-                    Iniciar turno
-                  </>
-                )}
-              </button>
+              {/* Shift indicator/button */}
+              {shiftEnded && !shiftStartedAt ? (
+                <span style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 20, background: P.bgSubtle, fontSize: 11, fontWeight: 500, color: P.textMuted }}>
+                  Turno: {fmtTime(shiftStartedAtLog)} → {fmtTime(shiftEndedAt)}
+                </span>
+              ) : confirmAction ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 10, color: P.textMed }}>
+                    {confirmAction === "start" ? `Iniciar a las ${new Date().toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}?` : `Finalizar a las ${new Date().toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}?`}
+                  </span>
+                  <button onClick={() => setConfirmAction(null)}
+                    style={{ padding: "5px 10px", borderRadius: 16, border: `1px solid ${P.border}`, background: "transparent", color: P.textMuted, fontSize: 10, cursor: "pointer" }}>
+                    No
+                  </button>
+                  <button onClick={confirmAction === "start" ? handleStartShift : handleEndShift}
+                    disabled={shiftLoading}
+                    style={{ padding: "5px 12px", borderRadius: 16, border: "none", cursor: "pointer", fontSize: 10, fontWeight: 600, color: "#fff", background: confirmAction === "start" ? "#22C55E" : P.vino, opacity: shiftLoading ? 0.6 : 1 }}>
+                    {shiftLoading ? "..." : "Confirmar"}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmAction(shiftStartedAt ? "end" : "start")}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 20, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, transition: "opacity .15s",
+                    background: shiftStartedAt ? P.vinoLight : P.doradoLight,
+                    color: shiftStartedAt ? P.vinoDeep : P.doradoDeep,
+                  }}
+                >
+                  {shiftStartedAt ? (
+                    <>
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#22C55E", animation: "pulse-dot 2s ease-in-out infinite", flexShrink: 0 }}/>
+                      <ShiftTimer startedAt={shiftStartedAt} />&nbsp;· Finalizar turno
+                    </>
+                  ) : (
+                    <>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                      </svg>
+                      Iniciar turno
+                    </>
+                  )}
+                </button>
+              )}
 
               {/* Logout */}
               <button

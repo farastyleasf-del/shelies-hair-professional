@@ -40,6 +40,14 @@ export function stylistFetch(url: string, options?: RequestInit): Promise<Respon
 }
 
 /**
+ * Fetch autenticado para el módulo de agentes.
+ * Lee el token de sessionStorage["agente_token"].
+ */
+export function agenteFetch(url: string, options?: RequestInit): Promise<Response> {
+  return tokenFetch("agente_token", url, options);
+}
+
+/**
  * Fetch autenticado para el módulo de domiciliarios.
  * Lee el token de sessionStorage["domiciliario_token"].
  */

@@ -5,6 +5,7 @@ import {
   startSession, endSession, getSessionsToday, getSessionStats, getChatStats,
   getEmployeeByUsername,
 } from "../lib/employees-db";
+import { query } from "../lib/db";
 import { signToken } from "../middleware/auth";
 
 const router = Router();
@@ -111,6 +112,31 @@ router.post("/sessions/end", async (req: Request, res: Response) => {
     res.json(session ?? { status: "no_open_session" });
   } catch (err) {
     console.error("[sessions end]", err);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+/* ── DELETE /api/employees/sessions/reset — admin reset turno de un agente ── */
+router.delete("/sessions/reset", async (req: Request, res: Response) => {
+  try {
+    const userId = parseInt(req.query.userId as string, 10);
+    if (!userId) { res.status(400).json({ error: "userId requerido" }); return; }
+    // Cerrar todas las sesiones abiertas de hoy para este usuario
+    const rows = await query(`
+      UPDATE bbdd_shelies.agent_sessions
+      SET ended_at = NOW(),
+          duration_minutes = GREATEST(1, EXTRACT(EPOCH FROM (NOW() - started_at))::int / 60)
+      WHERE user_id = $1 AND ended_at IS NULL
+      RETURNING *
+    `, [userId]);
+    // Eliminar sesiones de hoy (reset completo)
+    await query(`
+      DELETE FROM bbdd_shelies.agent_sessions
+      WHERE user_id = $1 AND session_date = CURRENT_DATE
+    `, [userId]);
+    res.json({ ok: true, cleared: rows.length });
+  } catch (err) {
+    console.error("[sessions reset]", err);
     res.status(500).json({ error: "Error interno" });
   }
 });

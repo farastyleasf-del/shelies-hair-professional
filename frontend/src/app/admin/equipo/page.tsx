@@ -413,9 +413,142 @@ function StylistModal({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+// ─── Turnos Section ──────────────────────────────────────────────────────────
+
+interface SessionRow {
+  id: number;
+  user_id: number;
+  user_name: string;
+  user_email: string;
+  started_at: string;
+  ended_at: string | null;
+  duration_minutes: number | null;
+  session_date: string;
+}
+
+function TurnosSection({ t }: { t: ReturnType<typeof useAdminTheme> }) {
+  const [sessions, setSessions] = useState<SessionRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [resetting, setResetting] = useState<number | null>(null);
+  const [toast, setToast] = useState("");
+
+  async function loadSessions() {
+    setLoading(true);
+    try {
+      const res = await authedFetch(apiUrl("/api/employees/sessions/today"));
+      if (res.ok) setSessions(await res.json());
+    } catch {} finally { setLoading(false); }
+  }
+
+  useEffect(() => { loadSessions(); }, []);
+
+  async function handleReset(userId: number, userName: string) {
+    if (!confirm(`Resetear turno de ${userName}? Se eliminarán las sesiones de hoy.`)) return;
+    setResetting(userId);
+    try {
+      const res = await authedFetch(apiUrl(`/api/employees/sessions/reset?userId=${userId}`), { method: "DELETE" });
+      if (res.ok) {
+        setToast(`Turno de ${userName} reseteado`);
+        setTimeout(() => setToast(""), 3000);
+        loadSessions();
+      }
+    } catch {} finally { setResetting(null); }
+  }
+
+  function fmtTime(iso: string | null) {
+    if (!iso) return "—";
+    return new Date(iso).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  }
+
+  // Agrupar por usuario
+  const byUser = sessions.reduce<Record<number, SessionRow[]>>((acc, s) => {
+    (acc[s.user_id] ??= []).push(s);
+    return acc;
+  }, {});
+
+  return (
+    <div className="space-y-4">
+      {toast && (
+        <div className="px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: "#16A34A" }}>
+          {toast}
+        </div>
+      )}
+
+      <div className="flex items-center justify-between">
+        <p className="text-sm" style={{ color: t.colors.textMuted }}>
+          Sesiones de hoy — {new Date().toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" })}
+        </p>
+        <button onClick={loadSessions} disabled={loading}
+          className="text-xs px-3 py-1.5 rounded-lg border font-medium disabled:opacity-50"
+          style={{ borderColor: t.colors.border, color: t.colors.textMuted }}>
+          {loading ? "..." : "Actualizar"}
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="text-center py-8">
+          <span className="text-sm" style={{ color: t.colors.textMuted }}>Cargando...</span>
+        </div>
+      ) : Object.keys(byUser).length === 0 ? (
+        <div className="text-center py-8 rounded-xl border" style={{ borderColor: t.colors.border }}>
+          <p className="text-sm" style={{ color: t.colors.textMuted }}>Sin turnos registrados hoy</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {Object.entries(byUser).map(([uid, userSessions]) => {
+            const userId = parseInt(uid);
+            const name = userSessions[0].user_name;
+            const active = userSessions.find(s => !s.ended_at);
+            const ended = userSessions.filter(s => !!s.ended_at);
+
+            return (
+              <div key={uid} className="rounded-xl border p-4" style={{ borderColor: t.colors.border, backgroundColor: t.colors.bgCard }}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full ${active ? "bg-green-500 animate-pulse" : "bg-gray-400"}`} />
+                    <span className="text-sm font-semibold" style={{ color: t.colors.text }}>{name}</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+                      style={{ backgroundColor: active ? "#DCFCE7" : t.colors.border, color: active ? "#16A34A" : t.colors.textMuted }}>
+                      {active ? "En turno" : "Finalizado"}
+                    </span>
+                  </div>
+                  <button onClick={() => handleReset(userId, name)}
+                    disabled={resetting === userId}
+                    className="text-[11px] px-3 py-1 rounded-lg border font-medium hover:opacity-80 disabled:opacity-50"
+                    style={{ borderColor: "#FCA5A5", color: "#DC2626", backgroundColor: "#FEF2F2" }}>
+                    {resetting === userId ? "..." : "Resetear turno"}
+                  </button>
+                </div>
+
+                {/* Sesiones del día */}
+                <div className="space-y-1">
+                  {active && (
+                    <div className="flex items-center gap-3 text-xs py-1 px-2 rounded" style={{ backgroundColor: "#F0FDF4" }}>
+                      <span style={{ color: "#16A34A" }} className="font-semibold">ACTIVA</span>
+                      <span style={{ color: t.colors.textMuted }}>Inicio: {fmtTime(active.started_at)}</span>
+                    </div>
+                  )}
+                  {ended.map(s => (
+                    <div key={s.id} className="flex items-center gap-3 text-xs py-1 px-2 rounded" style={{ backgroundColor: t.mode === "dark" ? "rgba(255,255,255,0.03)" : "#F9FAFB" }}>
+                      <span style={{ color: t.colors.textMuted }}>{fmtTime(s.started_at)} → {fmtTime(s.ended_at)}</span>
+                      <span style={{ color: t.colors.textMuted }}>{s.duration_minutes ?? 0} min</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
 export default function EquipoPage() {
   const t = useAdminTheme();
-  const [tab, setTab] = useState<"stylists" | "users">("stylists");
+  const [tab, setTab] = useState<"stylists" | "users" | "turnos">("stylists");
 
   // Stylists state
   const [stylists, setStylists] = useState<DBStylist[]>([]);
@@ -519,6 +652,13 @@ export default function EquipoPage() {
           onClick={() => setTab("users")}
         >
           🔐 Usuarios Admin
+        </button>
+        <button
+          className="pb-3 text-sm font-medium transition-colors"
+          style={tabStyle(tab === "turnos")}
+          onClick={() => setTab("turnos")}
+        >
+          🕐 Turnos
         </button>
       </div>
 
@@ -662,6 +802,9 @@ export default function EquipoPage() {
           )}
         </div>
       )}
+
+      {/* ── TURNOS TAB ──────────────────────────────────────────────────── */}
+      {tab === "turnos" && <TurnosSection t={t} />}
 
       {/* ── MODAL ───────────────────────────────────────────────────────────── */}
       {modalOpen && (

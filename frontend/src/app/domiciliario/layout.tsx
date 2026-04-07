@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { apiUrl, stylistFetch } from "@/lib/api";
+import { apiUrl, domiciliarioFetch } from "@/lib/api";
 
 // ─── Paleta ───────────────────────────────────────────────
 const P = {
@@ -80,14 +80,14 @@ function LoginDomiciliario({ onLogin }: { onLogin: (u: DomUser) => void }) {
     setLoading(true); setError("");
 
     try {
-      const authRes = await stylistFetch(apiUrl("/api/employees/auth"), {
+      const authRes = await fetch(apiUrl("/api/employees/auth"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: usuario.trim(), password }),
       });
-      if (authRes.status === 401) { setError("Contraseña incorrecta"); return; }
+      if (authRes.status === 401) { setError("Usuario o contraseña incorrectos"); return; }
       if (authRes.status === 403) { setError("Usuario inactivo"); return; }
-      if (!authRes.ok) { setError("Sin conexión al servidor"); return; }
+      if (!authRes.ok) { setError("Error del servidor"); return; }
 
       const data = await authRes.json() as { employee: DomUser; token?: string };
       if (!data.employee) { setError("Usuario no encontrado"); return; }

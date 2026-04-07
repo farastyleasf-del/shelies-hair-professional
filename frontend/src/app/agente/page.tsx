@@ -1,5 +1,5 @@
 "use client";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, agenteFetch } from "@/lib/api";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { timeAgo, templates } from "@/lib/admin-data";
 import type { Conversation, Message } from "@/lib/admin-types";
@@ -97,20 +97,31 @@ function useWA() {
 function AgenteTurnoBar({ userId, convCount }: { userId: number; convCount: number }) {
   const wa = useWA();
   const [shiftActive, setShiftActive] = useState(false);
+  const [shiftEnded, setShiftEnded]   = useState(false);
   const [startedAt, setStartedAt]     = useState<string | null>(null);
+  const [endedAt, setEndedAt]         = useState<string | null>(null);
   const [elapsed, setElapsed]         = useState("00:00:00");
   const [loading, setLoading]         = useState(false);
+  const [confirmAction, setConfirmAction] = useState<"start" | "end" | null>(null);
 
-  // Verificar si hay turno activo al montar
+  // Verificar estado del turno hoy al montar
   useEffect(() => {
     if (!userId) return;
-    fetch(apiUrl("/api/employees/sessions/today"))
+    agenteFetch(apiUrl("/api/employees/sessions/today"))
       .then(r => r.json())
       .then((sessions: Array<{ user_id?: number; ended_at: string | null; started_at: string }>) => {
-        const mine = sessions.find((s: { user_id?: number; ended_at: string | null; started_at: string }) =>
-          Number(s.user_id) === userId && !s.ended_at
-        );
-        if (mine) { setShiftActive(true); setStartedAt(mine.started_at); }
+        const mySessions = sessions.filter((s) => Number(s.user_id) === userId);
+        const active = mySessions.find((s) => !s.ended_at);
+        const ended = mySessions.find((s) => !!s.ended_at);
+        if (active) {
+          setShiftActive(true);
+          setStartedAt(active.started_at);
+        } else if (ended) {
+          // Ya tuvo turno hoy y lo cerró
+          setShiftEnded(true);
+          setStartedAt(ended.started_at);
+          setEndedAt(ended.ended_at);
+        }
       })
       .catch(() => {});
   }, [userId]);
@@ -130,52 +141,113 @@ function AgenteTurnoBar({ userId, convCount }: { userId: number; convCount: numb
     return () => clearInterval(iv);
   }, [shiftActive, startedAt]);
 
-  async function toggle() {
+  async function handleStart() {
     if (!userId) return;
     setLoading(true);
     try {
-      if (shiftActive) {
-        await fetch(apiUrl("/api/employees/sessions/end"), {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId }),
-        });
-        setShiftActive(false); setStartedAt(null); setElapsed("00:00:00");
-      } else {
-        const name  = sessionStorage.getItem("agente_name") ?? "Agente";
-        const email = sessionStorage.getItem("agente_email") ?? "";
-        const res = await fetch(apiUrl("/api/employees/sessions/start"), {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId, userName: name, userEmail: email }),
-        });
-        if (res.ok) {
-          const d = await res.json() as { started_at: string };
-          setShiftActive(true); setStartedAt(d.started_at);
-        }
+      const name  = sessionStorage.getItem("agente_name") ?? "Agente";
+      const email = sessionStorage.getItem("agente_email") ?? "";
+      const res = await agenteFetch(apiUrl("/api/employees/sessions/start"), {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, userName: name, userEmail: email }),
+      });
+      if (res.ok) {
+        const d = await res.json() as { started_at: string };
+        setShiftActive(true); setStartedAt(d.started_at);
       }
-    } catch {} finally { setLoading(false); }
+    } catch {} finally { setLoading(false); setConfirmAction(null); }
+  }
+
+  async function handleEnd() {
+    if (!userId) return;
+    setLoading(true);
+    try {
+      const res = await agenteFetch(apiUrl("/api/employees/sessions/end"), {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      if (res.ok) {
+        const d = await res.json() as { ended_at?: string };
+        setShiftActive(false);
+        setShiftEnded(true);
+        setEndedAt(d.ended_at ?? new Date().toISOString());
+        setElapsed("00:00:00");
+      }
+    } catch {} finally { setLoading(false); setConfirmAction(null); }
+  }
+
+  function fmtTime(iso: string | null) {
+    if (!iso) return "--:--";
+    return new Date(iso).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  // Ya terminó turno hoy - solo muestra resumen
+  if (shiftEnded && !shiftActive) {
+    return (
+      <div className="flex items-center justify-between px-3 py-2 flex-shrink-0"
+        style={{ backgroundColor: wa.headerBg, borderBottom: `1px solid ${wa.border}` }}>
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-gray-500" />
+          <div className="min-w-0 text-[10px]" style={{ color: wa.textFaint }}>
+            Turno finalizado · {fmtTime(startedAt)} → {fmtTime(endedAt)}
+          </div>
+        </div>
+        <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: wa.mode === "dark" ? "#2A3942" : "#DFE5E7", color: wa.textFaint }}>
+          Completado
+        </span>
+      </div>
+    );
   }
 
   return (
-    <div className="flex items-center justify-between px-3 py-2 flex-shrink-0"
+    <div className="flex flex-col flex-shrink-0"
       style={{ backgroundColor: wa.headerBg, borderBottom: `1px solid ${wa.border}` }}>
-      {/* Estado + métricas */}
-      <div className="flex items-center gap-2 min-w-0">
-        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${shiftActive ? "bg-green-500 animate-pulse" : "bg-gray-500"}`} />
-        {shiftActive ? (
-          <div className="min-w-0">
-            <span className="text-[11px] font-mono font-semibold" style={{ color: "#25D366" }}>{elapsed}</span>
-            <span className="text-[10px] ml-2" style={{ color: wa.textFaint }}>{convCount} conv</span>
-          </div>
-        ) : (
-          <span className="text-[10px]" style={{ color: wa.textFaint }}>Sin turno activo</span>
-        )}
+      <div className="flex items-center justify-between px-3 py-2">
+        {/* Estado + métricas */}
+        <div className="flex items-center gap-2 min-w-0">
+          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${shiftActive ? "bg-green-500 animate-pulse" : "bg-gray-500"}`} />
+          {shiftActive ? (
+            <div className="min-w-0">
+              <span className="text-[11px] font-mono font-semibold" style={{ color: "#25D366" }}>{elapsed}</span>
+              <span className="text-[10px] ml-2" style={{ color: wa.textFaint }}>Inicio: {fmtTime(startedAt)} · {convCount} conv</span>
+            </div>
+          ) : (
+            <span className="text-[10px]" style={{ color: wa.textFaint }}>Sin turno activo — marca tu inicio de jornada</span>
+          )}
+        </div>
+        {/* Botón */}
+        {!confirmAction ? (
+          <button onClick={() => setConfirmAction(shiftActive ? "end" : "start")}
+            className="px-2.5 py-1 rounded-lg text-white text-[10px] font-semibold transition-all flex-shrink-0"
+            style={{ backgroundColor: shiftActive ? "#EF5350" : "#25D366" }}>
+            {shiftActive ? "Finalizar turno" : "Iniciar turno"}
+          </button>
+        ) : null}
       </div>
-      {/* Botón */}
-      <button onClick={toggle} disabled={loading}
-        className="px-2.5 py-1 rounded-lg text-white text-[10px] font-semibold disabled:opacity-50 transition-all flex-shrink-0"
-        style={{ backgroundColor: shiftActive ? "#EF5350" : "#25D366" }}>
-        {loading ? "..." : shiftActive ? "⏹ Fin turno" : "▶ Turno"}
-      </button>
+
+      {/* Confirmación explícita */}
+      {confirmAction && (
+        <div className="flex items-center gap-2 px-3 py-2 border-t"
+          style={{ borderColor: wa.border, backgroundColor: confirmAction === "end" ? (wa.mode === "dark" ? "#3a1a1a" : "#fef2f2") : (wa.mode === "dark" ? "#0f2a1f" : "#f0fdf4") }}>
+          <span className="text-[10px] flex-1" style={{ color: wa.text }}>
+            {confirmAction === "start"
+              ? `Se registrará tu inicio de turno a las ${new Date().toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}`
+              : `Se registrará fin de turno a las ${new Date().toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}`
+            }
+          </span>
+          <button onClick={() => setConfirmAction(null)}
+            className="px-2 py-1 rounded text-[10px] font-medium"
+            style={{ color: wa.textMuted }}>
+            Cancelar
+          </button>
+          <button onClick={confirmAction === "start" ? handleStart : handleEnd}
+            disabled={loading}
+            className="px-3 py-1 rounded-lg text-white text-[10px] font-semibold disabled:opacity-50"
+            style={{ backgroundColor: confirmAction === "start" ? "#25D366" : "#EF5350" }}>
+            {loading ? "..." : "Confirmar"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -454,11 +526,57 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
   const [trackError, setTrackError]       = useState("");
   const [trackLoading, setTrackLoading]   = useState(false);
 
-  const blankOrder = { client_name: "", client_phone: "", client_email: "", items_text: "", total: "", notes: "", payment_method: "mercadopago" };
+  interface OrderItem { product_id: number; name: string; price: number; qty: number; }
+  interface Product { id: number; name: string; price: number; slug: string; stock: number; }
+
+  const blankOrder = {
+    client_name: "", client_phone: "", client_email: "",
+    ciudad: "", barrio: "", direccion: "", indicaciones: "",
+    notes: "", payment_method: "mercadopago",
+  };
   const [orderForm, setOrderForm]   = useState(blankOrder);
+  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
+  const [products, setProducts]     = useState<Product[]>([]);
+  const [productsLoaded, setProductsLoaded] = useState(false);
   const [orderSaving, setOrderSaving] = useState(false);
   const [orderDone, setOrderDone]   = useState<{ order_number: string } | null>(null);
   const [orderErr, setOrderErr]     = useState("");
+
+  // Cargar productos al montar
+  useEffect(() => {
+    if (productsLoaded) return;
+    agenteFetch(apiUrl("/api/products"))
+      .then(r => r.json())
+      .then((raw: Product[] | { data: Product[] }) => {
+        const arr = Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : [];
+        setProducts(arr.map(p => ({ ...p, price: Number(p.price) })));
+      })
+      .catch(() => {})
+      .finally(() => setProductsLoaded(true));
+  }, [productsLoaded]);
+
+  function addProduct(productId: number) {
+    const p = products.find(x => x.id === productId);
+    if (!p) return;
+    const existing = orderItems.find(x => x.product_id === productId);
+    if (existing) {
+      setOrderItems(prev => prev.map(x => x.product_id === productId ? { ...x, qty: x.qty + 1 } : x));
+    } else {
+      setOrderItems(prev => [...prev, { product_id: p.id, name: p.name, price: p.price, qty: 1 }]);
+    }
+  }
+
+  function removeProduct(productId: number) {
+    setOrderItems(prev => prev.filter(x => x.product_id !== productId));
+  }
+
+  function updateQty(productId: number, qty: number) {
+    if (qty < 1) return removeProduct(productId);
+    setOrderItems(prev => prev.map(x => x.product_id === productId ? { ...x, qty } : x));
+  }
+
+  const orderSubtotal = orderItems.reduce((sum, x) => sum + x.price * x.qty, 0);
+  const orderTotal = orderSubtotal;
 
   useEffect(() => { messagesEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
@@ -467,7 +585,7 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
       setOrderForm(f => ({ ...f, client_name: conv.customerName ?? "", client_phone: conv.customerId ?? "" }));
       setTrackQ(conv.customerId ?? "");
       setTrackResult(null); setTrackError("");
-      setOrderDone(null); setOrderErr("");
+      setOrderDone(null); setOrderErr(""); setOrderItems([]);
     }
   }, [conv?.id]);
 
@@ -484,7 +602,7 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
     if (!q) return;
     setTrackLoading(true); setTrackError(""); setTrackResult(null);
     try {
-      const res = await fetch(apiUrl(`/api/orders/track?q=${encodeURIComponent(q.toLowerCase())}`));
+      const res = await agenteFetch(apiUrl(`/api/orders/track?q=${encodeURIComponent(q.toLowerCase())}`));
       if (res.ok) setTrackResult(await res.json());
       else setTrackError("Pedido no encontrado con ese dato.");
     } catch { setTrackError("Error de conexión."); }
@@ -492,23 +610,26 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
   }
 
   async function handleCreateOrder() {
-    if (!orderForm.client_name || !orderForm.total) { setOrderErr("Nombre y total son obligatorios."); return; }
+    if (!orderForm.client_name) { setOrderErr("El nombre del cliente es obligatorio."); return; }
+    if (orderItems.length === 0) { setOrderErr("Agrega al menos un producto al pedido."); return; }
+    if (!orderForm.ciudad || !orderForm.barrio || !orderForm.direccion) {
+      setOrderErr("Ciudad, barrio y dirección son obligatorios."); return;
+    }
     setOrderSaving(true); setOrderErr(""); setOrderDone(null);
     try {
-      const items = orderForm.items_text
-        ? [{ description: orderForm.items_text, qty: 1, price: parseFloat(orderForm.total) }]
-        : [];
-      const res = await fetch(apiUrl("/api/orders"), {
+      const items = orderItems.map(x => ({ name: x.name, qty: x.qty, price: x.price, product_id: x.product_id }));
+      const address = [orderForm.direccion, orderForm.barrio, orderForm.ciudad, orderForm.indicaciones].filter(Boolean).join(" | ");
+      const res = await agenteFetch(apiUrl("/api/orders"), {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           client_name: orderForm.client_name, client_phone: orderForm.client_phone,
-          client_email: orderForm.client_email, client_address: "",
-          items, subtotal: parseFloat(orderForm.total), discount: 0,
-          total: parseFloat(orderForm.total), payment_method: orderForm.payment_method,
+          client_email: orderForm.client_email, client_address: address,
+          items, subtotal: orderSubtotal, discount: 0,
+          total: orderTotal, payment_method: orderForm.payment_method,
           notes: orderForm.notes, status: "nuevo",
         }),
       });
-      if (res.ok) { const d = await res.json() as { order_number: string }; setOrderDone(d); setOrderForm(blankOrder); }
+      if (res.ok) { const d = await res.json() as { order_number: string }; setOrderDone(d); setOrderForm(blankOrder); setOrderItems([]); }
       else { const e = await res.json() as { error?: string }; setOrderErr(e.error ?? "Error al crear pedido."); }
     } catch { setOrderErr("Error de conexión."); }
     finally { setOrderSaving(false); }
@@ -869,6 +990,8 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
                         {orderErr}
                       </p>
                     )}
+
+                    {/* ── Cliente ── */}
                     {(["client_name", "client_phone", "client_email"] as const).map(f => (
                       <div key={f}>
                         <label className="text-[10px] font-medium mb-0.5 block" style={{ color: wa.textFaint }}>
@@ -880,24 +1003,78 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
                           style={{ backgroundColor: wa.inputFieldBg, borderColor: wa.border, color: wa.text }} />
                       </div>
                     ))}
-                    <div>
-                      <label className="text-[10px] font-medium mb-0.5 block" style={{ color: wa.textFaint }}>
-                        Descripción del pedido
-                      </label>
-                      <textarea rows={2} value={orderForm.items_text}
-                        onChange={e => setOrderForm(p => ({ ...p, items_text: e.target.value }))}
-                        placeholder="ej: Shampoo Blindaje x1"
-                        className="w-full text-xs border rounded-lg px-3 py-1.5 outline-none resize-none"
-                        style={{ backgroundColor: wa.inputFieldBg, borderColor: wa.border, color: wa.text }} />
+
+                    {/* ── Dirección (obligatorio) ── */}
+                    <div className="pt-1 border-t" style={{ borderColor: wa.border }}>
+                      <p className="text-[10px] font-semibold mb-1.5" style={{ color: wa.textMuted }}>Dirección de envío *</p>
+                      {(["ciudad", "barrio", "direccion", "indicaciones"] as const).map(f => (
+                        <div key={f} className="mb-1.5">
+                          <label className="text-[10px] font-medium mb-0.5 block" style={{ color: wa.textFaint }}>
+                            {f === "ciudad" ? "Ciudad *" : f === "barrio" ? "Barrio *" : f === "direccion" ? "Dirección *" : "Indicaciones adicionales"}
+                          </label>
+                          {f === "indicaciones" ? (
+                            <textarea rows={1} value={orderForm[f]}
+                              onChange={e => setOrderForm(p => ({ ...p, [f]: e.target.value }))}
+                              placeholder="Ej: casa azul, timbre no funciona"
+                              className="w-full text-xs border rounded-lg px-3 py-1.5 outline-none resize-none"
+                              style={{ backgroundColor: wa.inputFieldBg, borderColor: wa.border, color: wa.text }} />
+                          ) : (
+                            <input value={orderForm[f]}
+                              onChange={e => setOrderForm(p => ({ ...p, [f]: e.target.value }))}
+                              placeholder={f === "ciudad" ? "Bogotá" : f === "barrio" ? "Chapinero" : "Cra 10 #45-60"}
+                              className="w-full text-xs border rounded-lg px-3 py-1.5 outline-none"
+                              style={{ backgroundColor: wa.inputFieldBg, borderColor: wa.border, color: wa.text }} />
+                          )}
+                        </div>
+                      ))}
                     </div>
-                    <div>
-                      <label className="text-[10px] font-medium mb-0.5 block" style={{ color: wa.textFaint }}>Total (COP) *</label>
-                      <input type="number" value={orderForm.total}
-                        onChange={e => setOrderForm(p => ({ ...p, total: e.target.value }))}
-                        placeholder="85000"
-                        className="w-full text-xs border rounded-lg px-3 py-1.5 outline-none"
-                        style={{ backgroundColor: wa.inputFieldBg, borderColor: wa.border, color: wa.text }} />
+
+                    {/* ── Productos ── */}
+                    <div className="pt-1 border-t" style={{ borderColor: wa.border }}>
+                      <p className="text-[10px] font-semibold mb-1.5" style={{ color: wa.textMuted }}>Productos *</p>
+                      <select
+                        value=""
+                        onChange={e => { const id = parseInt(e.target.value); if (id) addProduct(id); }}
+                        className="w-full text-xs border rounded-lg px-3 py-1.5 outline-none mb-2"
+                        style={{ backgroundColor: wa.inputFieldBg, borderColor: wa.border, color: wa.text }}>
+                        <option value="">Seleccionar producto...</option>
+                        {products.map(p => (
+                          <option key={p.id} value={p.id}>{p.name} — {fmtCOP(p.price)}</option>
+                        ))}
+                      </select>
+
+                      {orderItems.length > 0 && (
+                        <div className="space-y-1.5 mb-2">
+                          {orderItems.map(item => (
+                            <div key={item.product_id} className="flex items-center gap-1.5 rounded-lg p-1.5"
+                              style={{ backgroundColor: wa.panelItemBg }}>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[10px] font-medium truncate" style={{ color: wa.text }}>{item.name}</p>
+                                <p className="text-[9px]" style={{ color: wa.textFaint }}>{fmtCOP(item.price)} c/u</p>
+                              </div>
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                <button onClick={() => updateQty(item.product_id, item.qty - 1)}
+                                  className="w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold"
+                                  style={{ backgroundColor: wa.border, color: wa.text }}>−</button>
+                                <span className="text-[10px] font-semibold w-4 text-center" style={{ color: wa.text }}>{item.qty}</span>
+                                <button onClick={() => updateQty(item.product_id, item.qty + 1)}
+                                  className="w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold"
+                                  style={{ backgroundColor: wa.border, color: wa.text }}>+</button>
+                                <button onClick={() => removeProduct(item.product_id)}
+                                  className="w-5 h-5 rounded flex items-center justify-center text-[10px] ml-1"
+                                  style={{ color: "#EF5350" }}>✕</button>
+                              </div>
+                            </div>
+                          ))}
+                          <div className="flex justify-between items-center pt-1">
+                            <span className="text-[10px] font-semibold" style={{ color: wa.textMuted }}>Total:</span>
+                            <span className="text-xs font-bold" style={{ color: "#059669" }}>{fmtCOP(orderTotal)}</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
+
+                    {/* ── Pago y notas ── */}
                     <div>
                       <label className="text-[10px] font-medium mb-0.5 block" style={{ color: wa.textFaint }}>Método de pago</label>
                       <select value={orderForm.payment_method}
@@ -916,14 +1093,14 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
                       <label className="text-[10px] font-medium mb-0.5 block" style={{ color: wa.textFaint }}>Notas</label>
                       <textarea rows={2} value={orderForm.notes}
                         onChange={e => setOrderForm(p => ({ ...p, notes: e.target.value }))}
-                        placeholder="Dirección, instrucciones..."
+                        placeholder="Instrucciones especiales..."
                         className="w-full text-xs border rounded-lg px-3 py-1.5 outline-none resize-none"
                         style={{ backgroundColor: wa.inputFieldBg, borderColor: wa.border, color: wa.text }} />
                     </div>
-                    <button onClick={handleCreateOrder} disabled={orderSaving}
+                    <button onClick={handleCreateOrder} disabled={orderSaving || orderItems.length === 0}
                       className="w-full py-2 rounded-xl text-white text-xs font-semibold disabled:opacity-40"
                       style={{ backgroundColor: "#059669" }}>
-                      {orderSaving ? "Creando…" : "Crear pedido"}
+                      {orderSaving ? "Creando…" : `Crear pedido — ${fmtCOP(orderTotal)}`}
                     </button>
                   </>
                 )}
@@ -961,16 +1138,7 @@ export default function AgentePage() {
 
   function handleLogout() {
     try {
-      const uid = parseInt(sessionStorage.getItem("agente_user_id") ?? "0");
-      const email = sessionStorage.getItem("agente_email") ?? "";
-      if (uid && email) {
-        // Cierre de sesión con tracking — fire and forget
-        fetch(apiUrl("/api/employees/sessions/end"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId: uid }),
-        }).catch(() => {});
-      }
+      // No cerramos el turno automáticamente — el agente debe marcarlo manualmente
       sessionStorage.removeItem("agente_auth");
       sessionStorage.removeItem("agente_name");
       sessionStorage.removeItem("agente_user_id");
@@ -982,7 +1150,7 @@ export default function AgentePage() {
 
   const fetchConvs = useCallback(async () => {
     try {
-      const res = await fetch(apiUrl("/api/whatsapp/conversations"));
+      const res = await agenteFetch(apiUrl("/api/whatsapp/conversations"));
       if (!res.ok) return;
       const data = await res.json() as WaConvRaw[];
       if (Array.isArray(data)) { setConvs(data.map(waToConv)); setWaConnected(true); }
@@ -991,12 +1159,12 @@ export default function AgentePage() {
 
   const fetchMessages = useCallback(async (convId: string) => {
     try {
-      const res = await fetch(apiUrl(`/api/whatsapp/conversations?id=${convId}`));
+      const res = await agenteFetch(apiUrl(`/api/whatsapp/conversations?id=${convId}`));
       if (!res.ok) return;
       const data = await res.json() as { conversation: WaConvRaw; messages: WaMsgRaw[] } | null;
       if (data?.messages) {
         setMessages(data.messages.map(waMsgToMsg));
-        await fetch(apiUrl("/api/whatsapp/conversations"), {
+        await agenteFetch(apiUrl("/api/whatsapp/conversations"), {
           method: "PATCH", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id: convId, action: "read" }),
         });
@@ -1024,7 +1192,7 @@ export default function AgentePage() {
     if (!selected) return;
     setSending(true);
     try {
-      const res = await fetch(apiUrl("/api/whatsapp/send"), {
+      const res = await agenteFetch(apiUrl("/api/whatsapp/send"), {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone: selected, text, agentName: agenteName }),
       });
@@ -1051,7 +1219,7 @@ export default function AgentePage() {
     try {
       const fullImageUrl = typeof window !== "undefined"
         ? `${window.location.origin}${imageUrl}` : imageUrl;
-      const res = await fetch(apiUrl("/api/whatsapp/send"), {
+      const res = await agenteFetch(apiUrl("/api/whatsapp/send"), {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone: selected, imageUrl: fullImageUrl, text: caption, agentName: agenteName }),
       });

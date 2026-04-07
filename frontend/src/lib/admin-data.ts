@@ -41,6 +41,7 @@ export const statusColors: Record<string, string> = {
   convertido: "bg-green-500/20 text-green-400",
   pagado: "bg-emerald-500/20 text-emerald-400",
   empacado: "bg-amber-500/20 text-amber-400",
+  alistamiento: "bg-purple-500/20 text-purple-400",
   enviado: "bg-sky-500/20 text-sky-400",
   entregado: "bg-green-500/20 text-green-400",
   devuelto: "bg-red-500/20 text-red-400",

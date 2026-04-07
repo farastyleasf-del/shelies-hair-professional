@@ -2,251 +2,196 @@
 import { useState, useEffect, ReactNode } from "react";
 import { apiUrl } from "@/lib/api";
 import { AdminThemeProvider } from "@/lib/admin-theme";
-import Image from "next/image";
 
-/* ── Helpers de sesión ── */
-async function trackSessionStart(userId: number, userName: string, userEmail: string) {
-  try {
-    await fetch(apiUrl("/api/employees/sessions/start"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, userName, userEmail }),
-    });
-  } catch {}
-}
-async function trackSessionEnd(userId: number) {
-  try {
-    await fetch(apiUrl("/api/employees/sessions/end"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId }),
-    });
-  } catch {}
-}
+// ─── Paleta ───────────────────────────────────────────────
+const P = {
+  bg:           "#FAF7F4",
+  bgCard:       "#FFFFFF",
+  bgSubtle:     "#F5F0EC",
+  vino:         "#8B3A4A",
+  vinoDeep:     "#5E2430",
+  vinoLight:    "#F5EAEC",
+  dorado:       "#C9A46A",
+  doradoDeep:   "#A07C45",
+  doradoLight:  "#FDF6E8",
+  text:         "#1E0F0A",
+  textMed:      "#5C3A30",
+  textMuted:    "#957068",
+  textFaint:    "#C4A99F",
+  border:       "#EAE0DA",
+};
 
 /* ══════════════════════════════════════════════════════
-   LAYOUT AGENTE — Rol solo-chat
-   Acceso: cualquier usuario con rol agente / admin
-   Vista: únicamente el Inbox (sin panel admin)
+   LOGIN AGENTE — Estilo unificado con estilista/domiciliario
    ══════════════════════════════════════════════════════ */
 
 function LoginAgente({ onLogin }: { onLogin: (data: { name: string; id: number; email: string }) => void }) {
-  const [emailVal, setEmailVal] = useState("");
+  const [usuario, setUsuario]   = useState("");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [error, setError]       = useState("");
   const [loading, setLoading]   = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function submit(e?: React.FormEvent) {
+    e?.preventDefault();
+    if (!usuario || !password) return;
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(apiUrl("/api/admin/auth"), {
+      const res = await fetch(apiUrl("/api/employees/auth"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: emailVal, password }),
+        body: JSON.stringify({ name: usuario.trim(), password }),
       });
-      if (res.ok) {
-        const data = await res.json() as { user: { id: number; name: string; email: string; role: string } };
-        sessionStorage.setItem("agente_auth", "true");
-        sessionStorage.setItem("agente_name", data.user.name);
-        localStorage.setItem("shelie_agent_name", data.user.name);
-        onLogin({ name: data.user.name, id: data.user.id, email: data.user.email });
-        return;
-      }
-      if (emailVal === "admin@shelie.com" && password === "shelie2026") {
-        sessionStorage.setItem("agente_auth", "true");
-        sessionStorage.setItem("agente_name", "Shelie Admin");
-        localStorage.setItem("shelie_agent_name", "Shelie Admin");
-        onLogin({ name: "Shelie Admin", id: 1, email: emailVal });
-        return;
-      }
-      setError("Credenciales incorrectas");
+      if (res.status === 401) { setError("Usuario o contraseña incorrectos"); return; }
+      if (res.status === 403) { setError("Usuario inactivo"); return; }
+      if (!res.ok) { setError("Error del servidor"); return; }
+      const data = await res.json() as { employee: { id: number; name: string; email: string; cargo: string }; token?: string };
+      if (data.token) sessionStorage.setItem("agente_token", data.token);
+      sessionStorage.setItem("agente_auth", "true");
+      sessionStorage.setItem("agente_name", data.employee.name);
+      localStorage.setItem("shelie_agent_name", data.employee.name);
+      onLogin({ name: data.employee.name, id: data.employee.id, email: data.employee.email ?? usuario });
     } catch {
-      if (emailVal === "admin@shelie.com" && password === "shelie2026") {
-        sessionStorage.setItem("agente_auth", "true");
-        sessionStorage.setItem("agente_name", "Shelie Admin");
-        onLogin({ name: "Shelie Admin", id: 1, email: emailVal });
-      } else {
-        setError("Sin conexión al servidor");
-      }
+      setError("Sin conexión al servidor");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden"
-      style={{ background: "linear-gradient(135deg, #0D0D0D 0%, #1A0A10 40%, #2D1020 70%, #1A0A10 100%)" }}>
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Inter:wght@300;400;500;600&display=swap');
+        @keyframes spin { to { transform: rotate(360deg); } }
+        body { font-family: 'Inter', system-ui, sans-serif; }
+        .lg-flex-agente { display: none; }
+        @media (min-width: 1024px) { .lg-flex-agente { display: flex !important; } }
+      `}</style>
 
-      {/* Decoración de fondo */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-32 -right-32 w-96 h-96 rounded-full opacity-10"
-          style={{ background: "radial-gradient(circle, #8B3A4A, transparent)" }} />
-        <div className="absolute -bottom-32 -left-32 w-80 h-80 rounded-full opacity-10"
-          style={{ background: "radial-gradient(circle, #C9A46A, transparent)" }} />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full opacity-5"
-          style={{ background: "radial-gradient(circle, #8B3A4A, transparent)" }} />
-      </div>
-
-      {/* Card */}
-      <div className="relative w-full max-w-sm mx-4">
-        {/* Glow */}
-        <div className="absolute inset-0 rounded-3xl blur-xl opacity-20"
-          style={{ background: "linear-gradient(135deg, #8B3A4A, #C9A46A)" }} />
-
-        <div className="relative rounded-3xl overflow-hidden"
-          style={{ backgroundColor: "rgba(255,255,255,0.97)", boxShadow: "0 25px 60px rgba(0,0,0,0.5)" }}>
-
-          {/* Header con degradado de marca */}
-          <div className="px-8 pt-8 pb-6 text-center"
-            style={{ background: "linear-gradient(160deg, #5E0B2B 0%, #8B3A4A 50%, #A0455A 100%)" }}>
-            {/* Logo */}
-            <div className="flex justify-center mb-4">
-              <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-white/30 shadow-lg">
-                <Image
-                  src="/images/shelies-logo-real.jpg"
-                  alt="Shelie's"
-                  width={64}
-                  height={64}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            </div>
-            <h1 className="text-white font-bold text-xl tracking-wide">Shelie&apos;s Chat</h1>
-            <p className="text-white/60 text-xs mt-1">Módulo de Atención al Cliente</p>
-          </div>
-
-          {/* Indicador WhatsApp */}
-          <div className="flex items-center justify-center gap-2 py-3"
-            style={{ backgroundColor: "#f0fdf4", borderBottom: "1px solid #dcfce7" }}>
-            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-            <span className="text-[11px] font-medium text-green-700">WhatsApp Business</span>
-          </div>
-
-          {/* Form */}
-          <div className="px-8 py-6 space-y-4">
-            {/* Email */}
-            <div>
-              <label className="text-[11px] font-semibold text-[#6B6B6B] mb-1.5 block uppercase tracking-wider">
-                Correo electrónico
-              </label>
-              <div className="relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8B3A4A] opacity-60">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                      d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                  </svg>
-                </span>
-                <input
-                  value={emailVal}
-                  onChange={e => setEmailVal(e.target.value)}
-                  type="email"
-                  placeholder="tu@shelie.com"
-                  autoComplete="email"
-                  className="w-full pl-10 pr-4 py-3 text-sm rounded-xl border outline-none transition-all"
-                  style={{
-                    backgroundColor: "#FAF7F4",
-                    borderColor: "#EDE3E1",
-                    color: "#121212",
-                  }}
-                  onFocus={e => e.target.style.borderColor = "#8B3A4A"}
-                  onBlur={e => e.target.style.borderColor = "#EDE3E1"}
-                />
-              </div>
-            </div>
-
-            {/* Password */}
-            <div>
-              <label className="text-[11px] font-semibold text-[#6B6B6B] mb-1.5 block uppercase tracking-wider">
-                Contraseña
-              </label>
-              <div className="relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8B3A4A] opacity-60">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                      d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
-                </span>
-                <input
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  type={showPass ? "text" : "password"}
-                  placeholder="••••••••"
-                  autoComplete="current-password"
-                  onKeyDown={e => e.key === "Enter" && handleSubmit(e)}
-                  className="w-full pl-10 pr-10 py-3 text-sm rounded-xl border outline-none transition-all"
-                  style={{
-                    backgroundColor: "#FAF7F4",
-                    borderColor: "#EDE3E1",
-                    color: "#121212",
-                  }}
-                  onFocus={e => e.target.style.borderColor = "#8B3A4A"}
-                  onBlur={e => e.target.style.borderColor = "#EDE3E1"}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPass(!showPass)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 opacity-40 hover:opacity-70 transition-opacity"
-                  tabIndex={-1}>
-                  {showPass ? (
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                    </svg>
-                  ) : (
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* Error */}
-            {error && (
-              <div className="flex items-center gap-2 px-4 py-3 rounded-xl border text-sm"
-                style={{ backgroundColor: "#FEF2F2", borderColor: "#FECACA", color: "#DC2626" }}>
-                <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                {error}
-              </div>
-            )}
-
-            {/* Botón */}
-            <button
-              type="button"
-              onClick={handleSubmit as unknown as React.MouseEventHandler}
-              disabled={loading || !emailVal || !password}
-              className="w-full py-3.5 rounded-xl text-white text-sm font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-              style={{
-                background: loading ? "#8B3A4A" : "linear-gradient(135deg, #8B3A4A, #6B2A3A)",
-                boxShadow: "0 4px 15px rgba(139,58,74,0.35)",
-              }}>
-              {loading && (
-                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              )}
-              {loading ? "Verificando..." : "Ingresar al Chat"}
-            </button>
-          </div>
-
-          {/* Footer */}
-          <div className="px-8 pb-6 text-center">
-            <p className="text-[10px]" style={{ color: "#6B6B6B99" }}>
-              © 2026 Shelie&apos;s · Acceso solo para personal autorizado
+      <div style={{ minHeight: "100vh", display: "flex", background: `linear-gradient(160deg, ${P.bg} 0%, #F2E9E4 100%)` }}>
+        {/* Left brand panel — desktop only */}
+        <div
+          className="lg-flex-agente"
+          style={{
+            width: 420, flexShrink: 0,
+            background: `linear-gradient(160deg, ${P.vinoDeep} 0%, ${P.vino} 55%, #A85068 100%)`,
+            padding: "64px 48px", flexDirection: "column", justifyContent: "space-between",
+            position: "relative", overflow: "hidden",
+          }}
+        >
+          <div style={{ position: "absolute", top: -80, right: -80, width: 300, height: 300, borderRadius: "50%", border: `1px solid rgba(201,164,106,.15)` }}/>
+          <div style={{ position: "absolute", bottom: -60, left: -60, width: 240, height: 240, borderRadius: "50%", border: `1px solid rgba(201,164,106,.1)` }}/>
+          <div>
+            <p style={{ fontSize: 10, fontWeight: 600, color: `rgba(201,164,106,.7)`, letterSpacing: "0.3em", textTransform: "uppercase", marginBottom: 24 }}>Portal Agentes</p>
+            <h1 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 38, fontWeight: 700, color: "#fff", lineHeight: 1.15, marginBottom: 12 }}>
+              Shelie&apos;s<br/>Hair Studio
+            </h1>
+            <p style={{ fontSize: 14, color: "rgba(255,255,255,.5)", lineHeight: 1.6 }}>
+              Tu centro de atención al cliente. Gestiona chats de WhatsApp, crea pedidos y atiende consultas en un solo lugar.
             </p>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {["Inbox WhatsApp Business en tiempo real", "Crear pedidos desde el chat", "Plantillas de respuesta rápida", "Rastreo de pedidos al instante"].map(f => (
+              <div key={f} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 18, height: 18, borderRadius: "50%", border: `1.5px solid rgba(201,164,106,.5)`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke={P.dorado} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <span style={{ fontSize: 12, color: "rgba(255,255,255,.6)" }}>{f}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Right form */}
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 24px" }}>
+          <div style={{ width: "100%", maxWidth: 420, borderRadius: 24, background: "rgba(255,255,255,0.96)", boxShadow: "0 32px 80px rgba(94,36,48,0.18), 0 8px 24px rgba(0,0,0,0.08)", backdropFilter: "blur(20px)", padding: "40px 36px" }}>
+            <div style={{ textAlign: "center", marginBottom: 36 }}>
+              {/* Decorative gradient ring behind icon */}
+              <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", padding: 3, background: "conic-gradient(from 180deg, #8B3A4A, #C9A46A, #5E2430, #8B3A4A)", margin: "0 auto 16px", boxShadow: "0 8px 24px rgba(94,36,48,.25)" }}>
+                <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={P.vino} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>
+                  </svg>
+                </div>
+              </div>
+              <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 26, fontWeight: 600, color: P.text, margin: "0 0 6px" }}>Bienvenido</h2>
+              <p style={{ fontSize: 13, color: P.textMuted, margin: 0 }}>Usa el formato <strong>nombre.apellido</strong></p>
+            </div>
+
+            <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: P.textMed, textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 7 }}>Usuario</label>
+                <input
+                  value={usuario} onChange={e => setUsuario(e.target.value)}
+                  type="text" placeholder="nombre.apellido" autoComplete="username"
+                  style={{ width: "100%", padding: "13px 16px", borderRadius: 12, border: `1.5px solid ${P.border}`, fontSize: 15, color: P.text, background: "#FDFAF8", outline: "none", boxSizing: "border-box" }}
+                  onFocus={e => { e.target.style.borderColor = P.vino; e.target.style.boxShadow = `0 0 0 3px rgba(139,58,74,.08)`; }}
+                  onBlur={e => { e.target.style.borderColor = P.border; e.target.style.boxShadow = "none"; }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: P.textMed, textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 7 }}>Contraseña</label>
+                <div style={{ position: "relative" }}>
+                  <input
+                    value={password} onChange={e => setPassword(e.target.value)}
+                    type={showPass ? "text" : "password"} placeholder="••••••••••" autoComplete="current-password"
+                    style={{ width: "100%", padding: "13px 44px 13px 16px", borderRadius: 12, border: `1.5px solid ${P.border}`, fontSize: 15, color: P.text, background: "#FDFAF8", outline: "none", boxSizing: "border-box" }}
+                    onFocus={e => { e.target.style.borderColor = P.vino; e.target.style.boxShadow = `0 0 0 3px rgba(139,58,74,.08)`; }}
+                    onBlur={e => { e.target.style.borderColor = P.border; e.target.style.boxShadow = "none"; }}
+                  />
+                  <button type="button" onClick={() => setShowPass(v => !v)} tabIndex={-1} style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: P.textFaint, padding: 0 }}>
+                    {showPass
+                      ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                      : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    }
+                  </button>
+                </div>
+              </div>
+
+              {error && (
+                <div style={{ padding: "11px 14px", borderRadius: 10, background: "#FEF2F2", border: "1px solid #FECACA", color: "#DC2626", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  {error}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading || !usuario || !password}
+                style={{
+                  width: "100%", padding: "14px 16px", borderRadius: 12, border: "none", cursor: loading || !usuario || !password ? "not-allowed" : "pointer",
+                  background: `linear-gradient(135deg,${P.vinoDeep},${P.vino})`, color: "#fff", fontSize: 14, fontWeight: 600,
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  opacity: loading || !usuario || !password ? 0.5 : 1,
+                  boxShadow: loading || !usuario || !password ? "none" : "0 8px 24px rgba(94,36,48,.3)",
+                  transition: "opacity .15s",
+                }}
+              >
+                {loading && <span style={{ width: 14, height: 14, border: "2px solid rgba(255,255,255,.3)", borderTopColor: "#fff", borderRadius: "50%", display: "inline-block", animation: "spin .8s linear infinite" }}/>}
+                {loading ? "Verificando…" : "Ingresar al Chat"}
+              </button>
+
+              {/* WhatsApp hint */}
+              <div style={{ display: "flex", alignItems: "center", gap: 7, background: "rgba(0,168,132,0.06)", border: "1px solid rgba(0,168,132,0.2)", borderRadius: 10, padding: "9px 12px" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00A884" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                  <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>
+                </svg>
+                <p style={{ fontSize: 11, color: P.textMuted, margin: 0 }}>
+                  WhatsApp Business · Ingresa con tu usuario: <span style={{ fontWeight: 600, color: P.textMed }}>nombre.apellido</span>
+                </p>
+              </div>
+            </form>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
+
+/* ══════════════════════════════════════════════════════
+   LAYOUT WRAPPER
+   ══════════════════════════════════════════════════════ */
 
 export default function AgenteLayout({ children }: { children: ReactNode }) {
   const [authed, setAuthed]       = useState(false);
@@ -259,13 +204,6 @@ export default function AgenteLayout({ children }: { children: ReactNode }) {
     setAuthed(ok);
     setAgenteName(name);
     setChecking(false);
-
-    // Si ya estaba autenticado (recarga), registrar sesión activa
-    if (ok) {
-      const uid  = parseInt(sessionStorage.getItem("agente_user_id") ?? "0");
-      const mail = sessionStorage.getItem("agente_email") ?? "";
-      if (uid && mail) trackSessionStart(uid, name, mail);
-    }
   }, []);
 
   function handleLogin(data: { name: string; id: number; email: string }) {
@@ -273,14 +211,13 @@ export default function AgenteLayout({ children }: { children: ReactNode }) {
     sessionStorage.setItem("agente_email",   data.email);
     setAgenteName(data.name);
     setAuthed(true);
-    trackSessionStart(data.id, data.name, data.email);
   }
 
   if (checking) {
     return (
-      <div className="min-h-screen flex items-center justify-center"
-        style={{ background: "linear-gradient(135deg, #0D0D0D, #2D1020)" }}>
-        <span className="w-8 h-8 border-2 border-[#8B3A4A]/30 border-t-[#8B3A4A] rounded-full animate-spin" />
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: `linear-gradient(160deg,${P.bg},#F2E9E4)` }}>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        <span style={{ width: 28, height: 28, border: `2px solid rgba(139,58,74,.15)`, borderTopColor: P.vino, borderRadius: "50%", display: "inline-block", animation: "spin .8s linear infinite" }}/>
       </div>
     );
   }

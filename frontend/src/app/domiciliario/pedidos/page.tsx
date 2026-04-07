@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { apiUrl, domiciliarioFetch } from "@/lib/api";
 import type { DomUser } from "../layout";
 
@@ -65,20 +65,29 @@ function timeAgo(iso: string) {
 }
 
 function parseItems(raw: unknown): OrderItem[] {
-  if (Array.isArray(raw)) return raw as OrderItem[];
-  if (typeof raw === "string") {
-    try { return JSON.parse(raw) as OrderItem[]; } catch { return []; }
+  let arr: Record<string, unknown>[] = [];
+  if (Array.isArray(raw)) arr = raw;
+  else if (typeof raw === "string") {
+    try { arr = JSON.parse(raw); } catch { return []; }
   }
-  return [];
+  return arr.map(it => ({
+    name: String(it.name ?? it.description ?? "Producto"),
+    quantity: Number(it.quantity ?? it.qty ?? 1),
+    price: Number(it.price ?? 0),
+  }));
 }
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { bg: string; color: string; label: string }> = {
-    nuevo:     { bg: "#EFF6FF", color: "#1D4ED8", label: "Nuevo" },
-    enviado:   { bg: "#FEF9EC", color: "#A07C45", label: "Enviado" },
-    en_ruta:   { bg: "#EEF2FF", color: "#4F46E5", label: "En ruta" },
-    entregado: { bg: "#F0FDF4", color: "#16A34A", label: "Entregado" },
-    cancelado: { bg: "#FEF2F2", color: "#DC2626", label: "Cancelado" },
+    nuevo:        { bg: "#EFF6FF", color: "#1D4ED8", label: "Nuevo" },
+    pagado:       { bg: "#F0FDF4", color: "#16A34A", label: "Pagado" },
+    procesando:   { bg: "#FFFBEB", color: "#D97706", label: "Procesando" },
+    empacado:     { bg: "#FDF4FF", color: "#9333EA", label: "Empacado" },
+    alistamiento: { bg: "#F5F3FF", color: "#7C3AED", label: "Listo para envío" },
+    enviado:      { bg: "#FEF9EC", color: "#A07C45", label: "Enviado" },
+    en_ruta:      { bg: "#EEF2FF", color: "#4F46E5", label: "En ruta" },
+    entregado:    { bg: "#F0FDF4", color: "#16A34A", label: "Entregado" },
+    cancelado:    { bg: "#FEF2F2", color: "#DC2626", label: "Cancelado" },
   };
   const s = map[status] ?? { bg: P.bgSubtle, color: P.textMuted, label: status };
   return (
@@ -92,25 +101,52 @@ function StatusBadge({ status }: { status: string }) {
 function DeliverForm({
   order,
   user,
-  onDelivered,
+  onStatusChanged,
   onCancel,
 }: {
   order: Order;
   user: DomUser | null;
-  onDelivered: (id: number) => void;
+  onStatusChanged: (id: number, newStatus: string, message: string) => void;
   onCancel: () => void;
 }) {
-  const isCod = order.payment_method === "cod";
+  const isCod = order.payment_method === "cod" || order.payment_method === "contraentrega" || order.payment_method === "efectivo";
   const [amount, setAmount] = useState(String(order.total));
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [err, setErr] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  async function handlePhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Preview local
+    setPhotoPreview(URL.createObjectURL(file));
+    setUploading(true); setErr("");
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await domiciliarioFetch(apiUrl("/api/uploads"), { method: "POST", body: fd });
+      if (!res.ok) { setErr("Error al subir foto"); setUploading(false); return; }
+      const data = await res.json() as { url: string };
+      setPhotoUrl(data.url);
+    } catch {
+      setErr("Error al subir foto");
+    } finally {
+      setUploading(false);
+    }
+  }
 
   async function confirm() {
+    if (!photoUrl) { setErr("La foto de evidencia es obligatoria"); return; }
     setLoading(true); setErr("");
     try {
+      const existingNotes = order.notes ? order.notes + "\n" : "";
       const body: Record<string, unknown> = {
         status: "entregado",
         delivered_by: user?.name ?? "",
+        notes: existingNotes + `[evidencia] ${photoUrl}`,
       };
       if (isCod) body.payment_ref = amount;
 
@@ -120,7 +156,7 @@ function DeliverForm({
         body: JSON.stringify(body),
       });
       if (!res.ok) { setErr("Error al actualizar pedido"); return; }
-      onDelivered(order.id);
+      onStatusChanged(order.id, "entregado", "Pedido entregado con evidencia");
     } catch {
       setErr("Sin conexión al servidor");
     } finally {
@@ -131,6 +167,48 @@ function DeliverForm({
   return (
     <div style={{ marginTop: 16, padding: "16px", borderRadius: 12, border: `1.5px solid ${P.green}`, background: P.greenLight }}>
       <p style={{ fontSize: 13, fontWeight: 600, color: P.green, margin: "0 0 12px" }}>Confirmar entrega</p>
+
+      {/* Foto de evidencia (obligatoria) */}
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ fontSize: 11, fontWeight: 600, color: P.textMed, textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 6 }}>
+          Foto de evidencia *
+        </label>
+        <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handlePhoto}
+          style={{ display: "none" }} />
+
+        {photoPreview ? (
+          <div style={{ position: "relative", marginBottom: 8 }}>
+            <img src={photoPreview} alt="Evidencia" style={{ width: "100%", maxHeight: 200, objectFit: "cover", borderRadius: 10, border: `1.5px solid ${P.border}` }} />
+            {uploading && (
+              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.7)", borderRadius: 10 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: P.green }}>Subiendo...</span>
+              </div>
+            )}
+            {photoUrl && (
+              <div style={{ position: "absolute", top: 6, right: 6, width: 24, height: 24, borderRadius: "50%", background: "#16A34A", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+            )}
+            <button onClick={() => { setPhotoPreview(null); setPhotoUrl(null); if (fileRef.current) fileRef.current.value = ""; }}
+              style={{ position: "absolute", top: 6, left: 6, width: 24, height: 24, borderRadius: "50%", background: "rgba(0,0,0,0.5)", border: "none", color: "#fff", cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              ✕
+            </button>
+          </div>
+        ) : (
+          <button onClick={() => fileRef.current?.click()}
+            style={{
+              width: "100%", padding: "18px 0", borderRadius: 10, border: `2px dashed ${P.border}`, background: "#fff",
+              cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
+            }}>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={P.textFaint} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+            </svg>
+            <span style={{ fontSize: 12, fontWeight: 600, color: P.textMuted }}>Tomar foto o subir imagen</span>
+            <span style={{ fontSize: 10, color: P.textFaint }}>Obligatoria para cerrar el pedido</span>
+          </button>
+        )}
+      </div>
+
       {isCod && (
         <div style={{ marginBottom: 12 }}>
           <label style={{ fontSize: 11, fontWeight: 600, color: P.textMed, textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 6 }}>
@@ -152,14 +230,14 @@ function DeliverForm({
       <div style={{ display: "flex", gap: 8 }}>
         <button
           onClick={confirm}
-          disabled={loading}
+          disabled={loading || uploading || !photoUrl}
           style={{
-            flex: 1, padding: "10px 0", borderRadius: 10, border: "none", cursor: loading ? "not-allowed" : "pointer",
+            flex: 1, padding: "10px 0", borderRadius: 10, border: "none", cursor: loading || !photoUrl ? "not-allowed" : "pointer",
             background: P.green, color: "#fff", fontSize: 13, fontWeight: 600,
-            opacity: loading ? 0.6 : 1, transition: "opacity .15s",
+            opacity: loading || uploading || !photoUrl ? 0.6 : 1, transition: "opacity .15s",
           }}
         >
-          {loading ? "Guardando…" : "Confirmar entrega"}
+          {loading ? "Guardando…" : !photoUrl ? "Sube la foto primero" : "Confirmar entrega"}
         </button>
         <button
           onClick={onCancel}
@@ -177,19 +255,43 @@ function DeliverForm({
 function OrderCard({
   order,
   user,
-  onDelivered,
+  onStatusChanged,
 }: {
   order: Order;
   user: DomUser | null;
-  onDelivered: (id: number) => void;
+  onStatusChanged: (id: number, newStatus: string, message: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [showDeliverForm, setShowDeliverForm] = useState(false);
 
+  const [advancing, setAdvancing] = useState(false);
   const items = parseItems(order.items);
   const itemsStr = items.map(it => `${it.quantity}× ${it.name}`).join(", ");
-  const isCod = order.payment_method === "cod";
+  const isCod = order.payment_method === "cod" || order.payment_method === "contraentrega" || order.payment_method === "efectivo";
   const canDeliver = order.status === "enviado" || order.status === "en_ruta";
+
+  // Flujo de estados que el domiciliario puede avanzar
+  const nextAction: { status: string; label: string; color: string; message: string } | null =
+    order.status === "nuevo"        ? { status: "alistamiento", label: "Alistar pedido",     color: "#7C3AED", message: "Pedido en alistamiento" } :
+    order.status === "pagado"       ? { status: "alistamiento", label: "Alistar pedido",     color: "#7C3AED", message: "Pedido en alistamiento" } :
+    order.status === "empacado"     ? { status: "alistamiento", label: "Alistar pedido",     color: "#7C3AED", message: "Pedido en alistamiento" } :
+    order.status === "alistamiento" ? { status: "enviado",      label: "Recoger pedido",     color: "#2563EB", message: "Pedido recogido — en camino" } :
+    null; // enviado → entregado se maneja con DeliverForm
+
+  async function handleAdvance() {
+    if (!nextAction) return;
+    setAdvancing(true);
+    try {
+      const body: Record<string, unknown> = { status: nextAction.status };
+      if (nextAction.status === "enviado") body.delivered_by = user?.name ?? "";
+      const res = await domiciliarioFetch(apiUrl(`/api/orders/${order.id}`), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) onStatusChanged(order.id, nextAction.status, nextAction.message);
+    } catch {} finally { setAdvancing(false); }
+  }
 
   return (
     <div style={{ borderRadius: 14, border: `1px solid ${P.border}`, background: P.bgCard, overflow: "hidden", boxShadow: P.shadow, marginBottom: 12 }}>
@@ -286,7 +388,23 @@ function OrderCard({
             )}
           </div>
 
-          {/* CTA */}
+          {/* CTA — Avanzar estado */}
+          {nextAction && (
+            <button
+              onClick={handleAdvance}
+              disabled={advancing}
+              style={{
+                width: "100%", padding: "12px 0", borderRadius: 12, border: "none", cursor: advancing ? "not-allowed" : "pointer",
+                background: nextAction.color, color: "#fff", fontSize: 14, fontWeight: 600,
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                opacity: advancing ? 0.6 : 1, marginBottom: 8,
+              }}
+            >
+              {advancing ? "Procesando…" : nextAction.label}
+            </button>
+          )}
+
+          {/* CTA — Marcar entregado */}
           {canDeliver && !showDeliverForm && (
             <button
               onClick={() => setShowDeliverForm(true)}
@@ -307,7 +425,7 @@ function OrderCard({
             <DeliverForm
               order={order}
               user={user}
-              onDelivered={id => { onDelivered(id); setShowDeliverForm(false); setExpanded(false); }}
+              onStatusChanged={(id, s, m) => { onStatusChanged(id, s, m); setShowDeliverForm(false); setExpanded(false); }}
               onCancel={() => setShowDeliverForm(false)}
             />
           )}
@@ -335,7 +453,7 @@ export default function PedidosPage() {
   const loadOrders = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await domiciliarioFetch(apiUrl("/api/orders?status=enviado&limit=100"));
+      const res = await domiciliarioFetch(apiUrl("/api/orders?limit=200"));
       const data: Order[] = res.ok ? await res.json() : [];
       setOrders(data);
     } catch {
@@ -347,21 +465,28 @@ export default function PedidosPage() {
 
   useEffect(() => { loadOrders(); }, [loadOrders]);
 
-  function handleDelivered(id: number) {
-    setOrders(prev => prev.filter(o => o.id !== id));
-    setToast("Pedido marcado como entregado");
+  // Auto-refresh cada 30 segundos
+  useEffect(() => {
+    const iv = setInterval(loadOrders, 30000);
+    return () => clearInterval(iv);
+  }, [loadOrders]);
+
+  function handleStatusChanged(id: number, newStatus: string, message: string) {
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, status: newStatus } : o));
+    setToast(message);
     setTimeout(() => setToast(null), 3500);
   }
 
-  const pendientes = orders.filter(o => o.status === "enviado");
-  const enRuta     = orders.filter(o => o.status === "en_ruta");
+  const pendientes = orders.filter(o => ["nuevo", "pagado", "empacado", "alistamiento", "enviado", "en_ruta"].includes(o.status));
+  const enRuta     = orders.filter(o => ["alistamiento", "enviado", "en_ruta"].includes(o.status));
+  const entregados = orders.filter(o => o.status === "entregado");
   const todos      = orders;
 
   const visibleOrders = tab === "pendientes" ? pendientes : tab === "en_ruta" ? enRuta : todos;
 
   const tabs: { key: Tab; label: string; count: number }[] = [
     { key: "pendientes", label: "Pendientes", count: pendientes.length },
-    { key: "en_ruta",    label: "En Ruta",    count: enRuta.length },
+    { key: "en_ruta",    label: "Listos / En ruta", count: enRuta.length },
     { key: "todos",      label: "Todos",       count: todos.length },
   ];
 
@@ -445,7 +570,7 @@ export default function PedidosPage() {
           </div>
         ) : (
           visibleOrders.map(order => (
-            <OrderCard key={order.id} order={order} user={user} onDelivered={handleDelivered} />
+            <OrderCard key={order.id} order={order} user={user} onStatusChanged={handleStatusChanged} />
           ))
         )}
       </div>

@@ -74,6 +74,7 @@ export type OrderStatus =
   | "nuevo"
   | "pagado"
   | "empacado"
+  | "alistamiento"
   | "enviado"
   | "entregado"
   | "devuelto"
@@ -108,6 +109,7 @@ export interface AdminOrder {
     created: string;
     paid?: string;
     packed?: string;
+    listed?: string;
     shipped?: string;
     delivered?: string;
     returned?: string;
