@@ -80,8 +80,11 @@ app.use("/api/employees", (req, res, next) => {
   requireAuth(req, res, next);
 }, employeesRouter);
 
-// Protegidas completas
-app.use("/api/whatsapp",            requireAuth, whatsappRouter);
+// WhatsApp: webhook es público (Meta no envía JWT), el resto requiere auth
+app.use("/api/whatsapp", (req, res, next) => {
+  if (req.path === "/webhook") return next();
+  requireAuth(req, res, next);
+}, whatsappRouter);
 app.use("/api/stylist",             requireAuth, stylistRouter);
 
 /* ── 404 catch-all ── */
