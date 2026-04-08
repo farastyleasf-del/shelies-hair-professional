@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, ReactNode } from "react";
 import { apiUrl } from "@/lib/api";
+import Image from "next/image";
 import { AdminThemeProvider } from "@/lib/admin-theme";
 
 // ─── Paleta ───────────────────────────────────────────────
@@ -109,10 +110,8 @@ function LoginAgente({ onLogin }: { onLogin: (data: { name: string; id: number; 
             <div style={{ textAlign: "center", marginBottom: 36 }}>
               {/* Decorative gradient ring behind icon */}
               <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", padding: 3, background: "conic-gradient(from 180deg, #8B3A4A, #C9A46A, #5E2430, #8B3A4A)", margin: "0 auto 16px", boxShadow: "0 8px 24px rgba(94,36,48,.25)" }}>
-                <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={P.vino} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>
-                  </svg>
+                <div style={{ width: 56, height: 56, borderRadius: "50%", overflow: "hidden", background: "#fff" }}>
+                  <Image src="/images/shelies-logo-real.jpg" alt="Shelie's" width={56} height={56} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 </div>
               </div>
               <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 26, fontWeight: 600, color: P.text, margin: "0 0 6px" }}>Bienvenido</h2>

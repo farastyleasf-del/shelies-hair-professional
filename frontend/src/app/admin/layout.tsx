@@ -4,6 +4,7 @@ import { useState, useEffect, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AdminThemeProvider, useAdminTheme } from "@/lib/admin-theme";
+import Image from "next/image";
 
 // ─── Paleta ───────────────────────────────────────────────
 const P = {
@@ -25,30 +26,30 @@ const NAV_SECTIONS = [
   {
     title: "Principal",
     links: [
-      { href: "/admin",        label: "Dashboard",  icon: "📊" },
-      { href: "/admin/inbox",  label: "Inbox",      icon: "💬" },
+      { href: "/admin",        label: "Dashboard" },
+      { href: "/admin/inbox",  label: "Inbox" },
     ],
   },
   {
     title: "Negocio",
     links: [
-      { href: "/admin/pedidos",    label: "Pedidos",    icon: "📦" },
-      { href: "/admin/citas",      label: "Citas",      icon: "📅" },
-      { href: "/admin/promos",     label: "Promos",     icon: "🎉" },
+      { href: "/admin/pedidos",    label: "Pedidos" },
+      { href: "/admin/citas",      label: "Citas" },
+      { href: "/admin/promos",     label: "Promos" },
     ],
   },
   {
     title: "Catálogo",
     links: [
-      { href: "/admin/productos",  label: "Productos",  icon: "🧴" },
-      { href: "/admin/servicios",  label: "Servicios",  icon: "✂️" },
+      { href: "/admin/productos",  label: "Productos" },
+      { href: "/admin/servicios",  label: "Servicios" },
     ],
   },
   {
     title: "Equipo",
     links: [
-      { href: "/admin/equipo",     label: "Equipo",     icon: "👥" },
-      { href: "/admin/reportes",   label: "Reportes",   icon: "📈" },
+      { href: "/admin/equipo",     label: "Equipo" },
+      { href: "/admin/reportes",   label: "Reportes" },
     ],
   },
 ];
@@ -135,8 +136,8 @@ function LoginAdmin({ onLogin }: { onLogin: (user: { name: string; avatar: strin
           <div style={{ width: "100%", maxWidth: 420, borderRadius: 24, background: "rgba(255,255,255,0.96)", boxShadow: "0 32px 80px rgba(94,36,48,0.18), 0 8px 24px rgba(0,0,0,0.08)", backdropFilter: "blur(20px)", padding: "40px 36px" }}>
             <div style={{ textAlign: "center", marginBottom: 36 }}>
               <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", padding: 3, background: "conic-gradient(from 180deg, #8B3A4A, #C9A46A, #5E2430, #8B3A4A)", margin: "0 auto 16px", boxShadow: "0 8px 24px rgba(94,36,48,.25)" }}>
-                <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>
-                  💎
+                <div style={{ width: 56, height: 56, borderRadius: "50%", overflow: "hidden", background: "#fff" }}>
+                  <Image src="/images/shelies-logo-real.jpg" alt="Shelie's" width={56} height={56} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 </div>
               </div>
               <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 26, fontWeight: 600, color: P.text, margin: "0 0 6px" }}>Administración</h2>
@@ -214,8 +215,8 @@ function AdminSidebar({ user, onLogout }: { user: { name: string; avatar: string
       {/* User card */}
       {user && (
         <div style={{ borderRadius: 14, border: `1px solid ${t.colors.border}`, background: t.mode === "dark" ? t.colors.bgDeep : "#F5F0EC", padding: "14px 12px", textAlign: "center", marginBottom: 20 }}>
-          <div style={{ width: 44, height: 44, borderRadius: "50%", background: `linear-gradient(135deg,${P.vinoDeep},${P.vino})`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 8px", boxShadow: `0 4px 12px rgba(94,36,48,.2)`, fontSize: 20 }}>
-            {user.avatar || "💎"}
+          <div style={{ width: 44, height: 44, borderRadius: "50%", background: `linear-gradient(135deg,${P.vinoDeep},${P.vino})`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 8px", boxShadow: `0 4px 12px rgba(94,36,48,.2)`, overflow: "hidden" }}>
+            <Image src="/images/shelies-logo-real.jpg" alt="Shelie's" width={44} height={44} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           </div>
           <p style={{ fontSize: 13, fontWeight: 600, color: t.colors.text, margin: "0 0 2px" }}>{user.name}</p>
           <span style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.15em", color: t.colors.primary, background: t.colors.primaryLight, borderRadius: 20, padding: "2px 8px", display: "inline-block" }}>{user.role}</span>
@@ -240,7 +241,6 @@ function AdminSidebar({ user, onLogout }: { user: { name: string; avatar: string
                       color: active ? t.colors.primary : t.colors.textMuted,
                       borderLeft: active ? `3px solid ${t.colors.primary}` : "3px solid transparent",
                     }}>
-                    <span style={{ fontSize: 15 }}>{link.icon}</span>
                     <span>{link.label}</span>
                   </Link>
                 );
@@ -306,8 +306,8 @@ function AdminShell({ children, user, onLogout }: { children: ReactNode; user: {
 
             {/* Brand */}
             <Link href="/admin" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
-              <div style={{ width: 36, height: 36, borderRadius: "50%", background: `linear-gradient(135deg,${P.vinoDeep},${P.vino})`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 16 }}>
-                💎
+              <div style={{ width: 36, height: 36, borderRadius: "50%", overflow: "hidden", flexShrink: 0 }}>
+                <Image src="/images/shelies-logo-real.jpg" alt="Shelie's" width={36} height={36} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               </div>
               <div>
                 <p style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.35em", color: t.colors.textMuted, margin: 0 }}>Admin</p>
@@ -318,9 +318,13 @@ function AdminShell({ children, user, onLogout }: { children: ReactNode; user: {
             {/* Theme + user */}
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <button onClick={t.toggleMode}
-                style={{ width: 36, height: 36, borderRadius: 10, border: `1px solid ${t.colors.border}`, background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}
+                style={{ width: 36, height: 36, borderRadius: 10, border: `1px solid ${t.colors.border}`, background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: t.colors.textMuted }}
                 title={t.mode === "dark" ? "Modo claro" : "Modo oscuro"}>
-                {t.mode === "dark" ? "☀️" : "🌙"}
+                {t.mode === "dark" ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+                )}
               </button>
               {user && (
                 <div style={{ width: 32, height: 32, borderRadius: "50%", background: `linear-gradient(135deg,${P.doradoDeep},${P.dorado})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: "#fff", fontWeight: 700 }}>

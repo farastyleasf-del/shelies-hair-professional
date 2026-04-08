@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { apiUrl, domiciliarioFetch } from "@/lib/api";
+import Image from "next/image";
 
 // ─── Paleta ───────────────────────────────────────────────
 const P = {
@@ -149,10 +150,10 @@ function LoginDomiciliario({ onLogin }: { onLogin: (u: DomUser) => void }) {
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 24px" }}>
           <div style={{ width: "100%", maxWidth: 400 }}>
             <div style={{ textAlign: "center", marginBottom: 36 }}>
-              <div style={{ width: 56, height: 56, borderRadius: "50%", background: `linear-gradient(135deg,${P.vinoDeep},${P.vino})`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", boxShadow: `0 8px 24px rgba(94,36,48,.25)` }}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>
-                </svg>
+              <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", padding: 3, background: "conic-gradient(from 180deg, #8B3A4A, #C9A46A, #5E2430, #8B3A4A)", margin: "0 auto 16px", boxShadow: "0 8px 24px rgba(94,36,48,.25)" }}>
+                <div style={{ width: 56, height: 56, borderRadius: "50%", overflow: "hidden", background: "#fff" }}>
+                  <Image src="/images/shelies-logo-real.jpg" alt="Shelie's" width={56} height={56} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                </div>
               </div>
               <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 26, fontWeight: 600, color: P.text, margin: "0 0 6px" }}>Bienvenido</h2>
               <p style={{ fontSize: 13, color: P.textMuted, margin: 0 }}>Usa el formato <strong>nombre.apellido</strong></p>
