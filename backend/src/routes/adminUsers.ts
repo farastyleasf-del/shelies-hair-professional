@@ -52,6 +52,25 @@ router.post("/users", async (req: Request, res: Response) => {
     }
     await ensureAdminUsersTables();
     const user = await createAdminUser(body);
+
+    // Si el rol es agente o estilista, también crear en employees para que pueda loguearse en /agente o /estilista
+    if (body.role === "agente" || body.role === "estilista") {
+      try {
+        const bcrypt = await import("bcrypt");
+        const passwordHash = await bcrypt.hash(body.password, 12);
+        const cargo = body.role === "agente" ? "call_center" : "estilista";
+        const { query: dbQuery } = await import("../lib/db");
+        const cedula = String(user.id).padStart(10, "0");
+        await dbQuery(`
+          INSERT INTO bbdd_shelies.employees (cedula, name, cargo, site, email, status, username, password_hash, admin_user_id)
+          VALUES ($1, $2, $3, 'SUR', $4, 'activo', $5, $6, $7)
+          ON CONFLICT (username) DO UPDATE SET password_hash = $6, status = 'activo', name = $2
+        `, [cedula, body.name, cargo, body.email, body.email, passwordHash, user.id]);
+      } catch (empErr) {
+        console.warn("[admin/users] No se pudo crear en employees:", empErr);
+      }
+    }
+
     res.status(201).json(user);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error";
