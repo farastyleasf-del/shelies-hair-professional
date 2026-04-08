@@ -518,8 +518,78 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
   const [input, setInput]         = useState("");
   const [showTpl, setShowTpl]     = useState(false);
   const [showPanel, setShowPanel] = useState(false);
-  const [panelTab, setPanelTab]   = useState<"rastrear" | "crear" | "encuesta">("rastrear");
+  const [panelTab, setPanelTab]   = useState<"rastrear" | "crear" | "encuesta" | "cita" | "calendario">("rastrear");
   const [surveySent, setSurveySent] = useState(false);
+
+  // Citas
+  interface ServiceOpt { id: number; title: string; price: string; }
+  interface StylistOpt { id: number; name: string; }
+  interface AppointmentRow { id: number; client_name: string; date: string; time_slot: string; status: string; notes: string; service_name?: string; }
+  const [services, setServices] = useState<ServiceOpt[]>([]);
+  const [stylists, setStylists] = useState<StylistOpt[]>([]);
+  const [allAppts, setAllAppts] = useState<AppointmentRow[]>([]);
+  const [citaForm, setCitaForm] = useState({ servicio: "", estilista: "", fecha: "", hora: "08:00" });
+  const [citaSaving, setCitaSaving] = useState(false);
+  const [citaDone, setCitaDone] = useState<string | null>(null);
+  const [citaErr, setCitaErr] = useState("");
+  const CITA_HOURS = ["08:00", "12:00", "16:00"];
+  const CITA_HOUR_LABELS: Record<string, string> = { "08:00": "8:00 AM", "12:00": "12:00 PM", "16:00": "4:00 PM" };
+
+  // Cargar servicios y estilistas
+  useEffect(() => {
+    agenteFetch(apiUrl("/api/services"))
+      .then(r => r.json())
+      .then((d: { data?: ServiceOpt[] } | ServiceOpt[]) => {
+        const arr = Array.isArray(d) ? d : d.data ?? [];
+        setServices(arr);
+      }).catch(() => {});
+    agenteFetch(apiUrl("/api/services/stylists/list"))
+      .then(r => r.json())
+      .then((d: { data?: StylistOpt[] } | StylistOpt[]) => {
+        const arr = Array.isArray(d) ? d : (d as { data?: StylistOpt[] }).data ?? [];
+        setStylists(arr);
+      }).catch(() => {});
+  }, []);
+
+  // Cargar todas las citas para el calendario
+  function loadAppointments() {
+    agenteFetch(apiUrl("/api/appointments"))
+      .then(r => r.json())
+      .then((d: { data?: AppointmentRow[] } | AppointmentRow[]) => {
+        const arr = Array.isArray(d) ? d : (d as { data?: AppointmentRow[] }).data ?? [];
+        setAllAppts(arr.map(a => ({ ...a, date: a.date ? String(a.date).slice(0, 10) : "" })));
+      }).catch(() => {});
+  }
+  useEffect(() => { loadAppointments(); }, []);
+
+  async function handleCreateCita() {
+    if (!citaForm.servicio || !citaForm.fecha || !citaForm.hora) { setCitaErr("Servicio, fecha y hora son obligatorios."); return; }
+    if (!conv) return;
+    setCitaSaving(true); setCitaErr(""); setCitaDone(null);
+    try {
+      const svc = services.find(s => s.title === citaForm.servicio);
+      const res = await agenteFetch(apiUrl("/api/appointments"), {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          service_id: svc?.id ?? null,
+          stylist_id: stylists.find(s => s.name === citaForm.estilista)?.id ?? null,
+          client_name: conv.customerName, client_phone: conv.customerId, client_email: "",
+          date: citaForm.fecha, time_slot: citaForm.hora,
+          status: "pendiente", notes: `Servicio: ${citaForm.servicio} | Estilista: ${citaForm.estilista || "Sin preferencia"} | Agendada por agente`,
+          service_name: citaForm.servicio, stylist_name: citaForm.estilista || "",
+        }),
+      });
+      if (res.ok) {
+        setCitaDone(`${citaForm.servicio} — ${citaForm.fecha} ${CITA_HOUR_LABELS[citaForm.hora]}`);
+        setCitaForm({ servicio: "", estilista: "", fecha: "", hora: "08:00" });
+        loadAppointments();
+      } else {
+        const e = await res.json() as { error?: string };
+        setCitaErr(e.error ?? "Error al crear cita.");
+      }
+    } catch { setCitaErr("Error de conexión."); }
+    finally { setCitaSaving(false); }
+  }
   const messagesEnd = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -716,6 +786,30 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
                 color: showPanel && panelTab === "crear" ? "#059669" : wa.textMuted,
               }}>
               ➕
+            </button>
+            <button
+              onClick={() => { setShowPanel(!showPanel); setPanelTab("cita"); setCitaDone(null); setCitaErr(""); }}
+              title="Agendar cita"
+              className="w-9 h-9 rounded-full flex items-center justify-center transition-colors"
+              style={{
+                backgroundColor: showPanel && panelTab === "cita" ? "#3B82F630" : "transparent",
+                color: showPanel && panelTab === "cita" ? "#3B82F6" : wa.textMuted,
+              }}>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+              </svg>
+            </button>
+            <button
+              onClick={() => { setShowPanel(!showPanel); setPanelTab("calendario"); loadAppointments(); }}
+              title="Ver calendario"
+              className="w-9 h-9 rounded-full flex items-center justify-center transition-colors"
+              style={{
+                backgroundColor: showPanel && panelTab === "calendario" ? "#F59E0B30" : "transparent",
+                color: showPanel && panelTab === "calendario" ? "#F59E0B" : wa.textMuted,
+              }}>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+              </svg>
             </button>
             <button
               onClick={() => { setShowPanel(!showPanel); setPanelTab("encuesta"); setSurveySent(false); }}
@@ -917,6 +1011,22 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
               }}>
               Crear
             </button>
+            <button onClick={() => { setPanelTab("cita"); setCitaDone(null); setCitaErr(""); }}
+              className="flex-1 py-2.5 text-xs font-semibold transition-colors"
+              style={{
+                color: panelTab === "cita" ? "#3B82F6" : wa.textFaint,
+                borderBottom: panelTab === "cita" ? "2px solid #3B82F6" : "2px solid transparent",
+              }}>
+              Cita
+            </button>
+            <button onClick={() => { setPanelTab("calendario"); loadAppointments(); }}
+              className="flex-1 py-2.5 text-xs font-semibold transition-colors"
+              style={{
+                color: panelTab === "calendario" ? "#F59E0B" : wa.textFaint,
+                borderBottom: panelTab === "calendario" ? "2px solid #F59E0B" : "2px solid transparent",
+              }}>
+              Agenda
+            </button>
             <button onClick={() => { setPanelTab("encuesta"); setSurveySent(false); }}
               className="flex-1 py-2.5 text-xs font-semibold transition-colors"
               style={{
@@ -987,6 +1097,160 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
             )}
 
             {/* ── Crear pedido ── */}
+            {/* ── Agendar cita ── */}
+            {panelTab === "cita" && (
+              <div className="space-y-2.5">
+                <p className="text-xs font-semibold" style={{ color: wa.textMuted }}>Agendar cita para el cliente</p>
+
+                {citaDone ? (
+                  <div className="rounded-xl p-3 text-xs space-y-1.5"
+                    style={{ backgroundColor: wa.mode === "dark" ? "#3B82F620" : "#EFF6FF", border: "1px solid #3B82F6aa" }}>
+                    <p className="font-bold" style={{ color: "#3B82F6" }}>Cita agendada</p>
+                    <p style={{ color: wa.textMuted }}>{citaDone}</p>
+                    <button
+                      onClick={() => onSend(`Tu cita ha sido agendada:\n${citaDone}\n\nTe esperamos en Shelie's Hair Studio.`)}
+                      className="w-full py-1.5 rounded-lg text-white text-xs font-medium"
+                      style={{ backgroundColor: wa.green }}>
+                      Enviar confirmación al cliente
+                    </button>
+                    <button onClick={() => setCitaDone(null)}
+                      className="w-full py-1 text-xs hover:underline" style={{ color: "#3B82F6" }}>
+                      Agendar otra
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {citaErr && (
+                      <p className="text-xs text-red-500 rounded-lg px-3 py-2"
+                        style={{ backgroundColor: wa.mode === "dark" ? "#ff000020" : "#fff5f5" }}>
+                        {citaErr}
+                      </p>
+                    )}
+                    <div>
+                      <label className="text-[10px] font-medium mb-0.5 block" style={{ color: wa.textFaint }}>Servicio *</label>
+                      <select value={citaForm.servicio}
+                        onChange={e => setCitaForm(f => ({ ...f, servicio: e.target.value }))}
+                        className="w-full text-xs border rounded-lg px-3 py-1.5 outline-none"
+                        style={{ backgroundColor: wa.inputFieldBg, borderColor: wa.border, color: wa.text }}>
+                        <option value="">Seleccionar servicio...</option>
+                        {services.map(s => (
+                          <option key={s.id} value={s.title}>{s.title} — {fmtCOP(Number(s.price))}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-medium mb-0.5 block" style={{ color: wa.textFaint }}>Estilista</label>
+                      <select value={citaForm.estilista}
+                        onChange={e => setCitaForm(f => ({ ...f, estilista: e.target.value }))}
+                        className="w-full text-xs border rounded-lg px-3 py-1.5 outline-none"
+                        style={{ backgroundColor: wa.inputFieldBg, borderColor: wa.border, color: wa.text }}>
+                        <option value="">Sin preferencia</option>
+                        {stylists.map(s => (
+                          <option key={s.id} value={s.name}>{s.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-medium mb-0.5 block" style={{ color: wa.textFaint }}>Fecha *</label>
+                      <input type="date" value={citaForm.fecha}
+                        min={new Date().toISOString().slice(0, 10)}
+                        onChange={e => setCitaForm(f => ({ ...f, fecha: e.target.value }))}
+                        className="w-full text-xs border rounded-lg px-3 py-1.5 outline-none"
+                        style={{ backgroundColor: wa.inputFieldBg, borderColor: wa.border, color: wa.text }} />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-medium mb-0.5 block" style={{ color: wa.textFaint }}>Hora *</label>
+                      <div className="flex gap-1.5">
+                        {CITA_HOURS.map(h => {
+                          const isOccupied = allAppts.some(a => a.date === citaForm.fecha && a.time_slot === h && a.status !== "cancelado");
+                          return (
+                            <button key={h} onClick={() => !isOccupied && setCitaForm(f => ({ ...f, hora: h }))}
+                              disabled={isOccupied}
+                              className="flex-1 py-2 rounded-lg text-[10px] font-semibold transition-all disabled:opacity-30"
+                              style={{
+                                backgroundColor: citaForm.hora === h ? "#3B82F6" : (wa.mode === "dark" ? "#2A3942" : "#F3F4F6"),
+                                color: citaForm.hora === h ? "#fff" : wa.text,
+                                border: citaForm.hora === h ? "2px solid #3B82F6" : `1px solid ${wa.border}`,
+                              }}>
+                              {CITA_HOUR_LABELS[h]}
+                              {isOccupied && <span className="block text-[8px]" style={{ color: "#EF4444" }}>Ocupado</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    {/* Info de cliente */}
+                    <div className="rounded-lg p-2 text-[10px]" style={{ backgroundColor: wa.panelItemBg }}>
+                      <p style={{ color: wa.textFaint }}>Cliente:</p>
+                      <p className="font-semibold" style={{ color: wa.text }}>{conv?.customerName ?? "—"}</p>
+                      <p style={{ color: wa.textFaint }}>{conv?.customerId ?? ""}</p>
+                    </div>
+                    <button onClick={handleCreateCita} disabled={citaSaving || !citaForm.servicio || !citaForm.fecha}
+                      className="w-full py-2 rounded-xl text-white text-xs font-semibold disabled:opacity-40"
+                      style={{ backgroundColor: "#3B82F6" }}>
+                      {citaSaving ? "Agendando…" : "Agendar cita"}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* ── Calendario / Agenda ── */}
+            {panelTab === "calendario" && (() => {
+              const today = new Date().toISOString().slice(0, 10);
+              // Agrupar por fecha los próximos 7 días
+              const days: string[] = [];
+              for (let i = 0; i < 7; i++) {
+                const d = new Date(); d.setDate(d.getDate() + i);
+                days.push(d.toISOString().slice(0, 10));
+              }
+              const dayNames = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
+              return (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold" style={{ color: wa.textMuted }}>Agenda — Próximos 7 días</p>
+                  {days.map(day => {
+                    const dayAppts = allAppts.filter(a => a.date === day && a.status !== "cancelado");
+                    const d = new Date(day + "T12:00:00");
+                    const label = day === today ? "Hoy" : `${dayNames[d.getDay()]} ${d.getDate()}`;
+                    return (
+                      <div key={day}>
+                        <p className="text-[10px] font-semibold mb-1 mt-1" style={{ color: wa.text }}>
+                          {label}
+                          <span className="ml-1 font-normal" style={{ color: wa.textFaint }}>
+                            ({dayAppts.length} cita{dayAppts.length !== 1 ? "s" : ""})
+                          </span>
+                        </p>
+                        {/* Slots */}
+                        <div className="space-y-1">
+                          {CITA_HOURS.map(h => {
+                            const slotAppts = dayAppts.filter(a => a.time_slot === h);
+                            const free = slotAppts.length === 0;
+                            return (
+                              <div key={h} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[10px]"
+                                style={{ backgroundColor: free ? (wa.mode === "dark" ? "#0f2a1f" : "#F0FDF4") : wa.panelItemBg }}>
+                                <span className="font-mono font-semibold w-12" style={{ color: wa.textMuted }}>{CITA_HOUR_LABELS[h]}</span>
+                                {free ? (
+                                  <span style={{ color: "#16A34A" }} className="font-medium">Disponible</span>
+                                ) : (
+                                  <div className="flex-1 min-w-0">
+                                    {slotAppts.map(a => (
+                                      <p key={a.id} className="truncate" style={{ color: wa.text }}>
+                                        {a.client_name} {a.notes ? `· ${a.notes.split("|")[0]?.trim()}` : ""}
+                                      </p>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+
             {/* ── Encuesta de satisfacción ── */}
             {panelTab === "encuesta" && (
               <div className="space-y-3">
