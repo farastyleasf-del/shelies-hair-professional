@@ -580,7 +580,10 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
         }),
       });
       if (res.ok) {
-        setCitaDone(`${citaForm.servicio} — ${citaForm.fecha} ${CITA_HOUR_LABELS[citaForm.hora]}`);
+        const svcPrice = svc ? fmtCOP(Number(svc.price)) : "";
+        const estilistaText = citaForm.estilista ? ` con ${citaForm.estilista}` : "";
+        const fechaFormatted = new Date(citaForm.fecha + "T12:00:00").toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" });
+        setCitaDone(`*${citaForm.servicio}*${estilistaText}\n${fechaFormatted} a las ${CITA_HOUR_LABELS[citaForm.hora]}${svcPrice ? `\nValor: ${svcPrice}` : ""}`);
         setCitaForm({ servicio: "", estilista: "", fecha: "", hora: "08:00" });
         loadAppointments();
       } else {
@@ -1108,10 +1111,16 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
                     <p className="font-bold" style={{ color: "#3B82F6" }}>Cita agendada</p>
                     <p style={{ color: wa.textMuted }}>{citaDone}</p>
                     <button
-                      onClick={() => onSend(`Tu cita ha sido agendada:\n${citaDone}\n\nTe esperamos en Shelie's Hair Studio.`)}
+                      onClick={() => onSend(`Hola ${conv?.customerName?.split(" ")[0] ?? ""},\n\nTu cita ha sido agendada:\n${citaDone}\n\nPara confirmar tu reserva, realiza el pago de la seña a través de este enlace:\nhttps://link.mercadopago.com.co/shelieshairstudio\n\nUna vez realizado el pago, envíanos el comprobante por este chat.\n\nTe esperamos en *Shelie's Hair Studio*.`)}
                       className="w-full py-1.5 rounded-lg text-white text-xs font-medium"
                       style={{ backgroundColor: wa.green }}>
-                      Enviar confirmación al cliente
+                      Enviar confirmación + link de pago
+                    </button>
+                    <button
+                      onClick={() => onSend(`Hola ${conv?.customerName?.split(" ")[0] ?? ""},\n\nTu cita ha sido agendada:\n${citaDone}\n\nTe esperamos en *Shelie's Hair Studio*.`)}
+                      className="w-full py-1.5 rounded-lg text-xs font-medium"
+                      style={{ backgroundColor: "transparent", color: wa.green, border: `1px solid ${wa.green}` }}>
+                      Enviar solo confirmación
                     </button>
                     <button onClick={() => setCitaDone(null)}
                       className="w-full py-1 text-xs hover:underline" style={{ color: "#3B82F6" }}>
