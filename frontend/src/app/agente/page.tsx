@@ -535,14 +535,30 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
   const [citaErr, setCitaErr] = useState("");
   const CITA_SLOTS = [{ label: "8:00 AM", value: "08:00" }, { label: "12:00 PM", value: "12:00" }, { label: "4:00 PM", value: "16:00" }];
   const CITA_HOUR_LABELS: Record<string, string> = { "08:00": "8:00 AM", "12:00": "12:00 PM", "16:00": "4:00 PM" };
-  const CITA_SERVICIOS = [
+  const [citaServicios, setCitaServicios] = useState([
     { name: "Alisado Orgánico Efecto Shelie's", price: 350000 }, { name: "Botox Capilar Canela", price: 280000 },
     { name: "Terapia Total Scalp", price: 220000 }, { name: "Terapia de Reconstrucción", price: 200000 },
-    { name: "Repolarización — Cronograma Capilar", price: 180000 }, { name: "Nano Cristalización (+$50.000)", price: 50000 },
-    { name: "Corte Bordado (+$40.000)", price: 40000 }, { name: "Luz Fotónica / Infrarroja (+$40.000)", price: 40000 },
-    { name: "Terapia de Ozono (+$50.000)", price: 50000 },
-  ];
-  const CITA_ESTILISTAS = [{ name: "Shelie", role: "Fundadora — Alisados" }, { name: "Valentina", role: "Tratamientos Capilares" }];
+    { name: "Repolarización — Cronograma Capilar", price: 180000 },
+  ]);
+  useEffect(() => {
+    agenteFetch(apiUrl("/api/services"))
+      .then(r => r.json())
+      .then((d: { data?: Array<{ title: string; price: string; is_active: boolean }> } | Array<{ title: string; price: string; is_active: boolean }>) => {
+        const arr = Array.isArray(d) ? d : d.data ?? [];
+        const active = arr.filter(s => s.is_active !== false && s.price);
+        if (active.length > 0) setCitaServicios(active.map(s => ({ name: s.title, price: Number(s.price) })));
+      }).catch(() => {});
+  }, []);
+  const [citaEstilistas, setCitaEstilistas] = useState([{ name: "Shelie", role: "Fundadora — Alisados" }, { name: "Valentina", role: "Tratamientos Capilares" }]);
+  useEffect(() => {
+    agenteFetch(apiUrl("/api/services/stylists/list"))
+      .then(r => r.json())
+      .then((d: { data?: Array<{ name: string; role: string; is_active: boolean }> } | Array<{ name: string; role: string; is_active: boolean }>) => {
+        const arr = Array.isArray(d) ? d : d.data ?? [];
+        const active = arr.filter(s => s.is_active !== false);
+        if (active.length > 0) setCitaEstilistas(active.map(s => ({ name: s.name, role: s.role || "Estilista" })));
+      }).catch(() => {});
+  }, []);
   const MP_LINK = "https://link.mercadopago.com.co/shelieshairstudio";
 
   // Cargar servicios y estilistas
@@ -1175,7 +1191,7 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
                     {/* Step 1 — Servicio */}
                     {citaStep === 1 && (<div className="space-y-1">
                       <p className="text-[11px] font-semibold" style={{ color: wa.text }}>Selecciona el servicio</p>
-                      {CITA_SERVICIOS.map(s => (
+                      {citaServicios.map(s => (
                         <button key={s.name} onClick={() => { setCitaData(d => ({ ...d, servicio: s.name, precio: s.price })); setCitaStep(2); }}
                           className="w-full text-left px-3 py-2 rounded-lg text-xs transition-all"
                           style={{ backgroundColor: citaData.servicio === s.name ? "#3B82F615" : "transparent", border: citaData.servicio === s.name ? "1.5px solid #3B82F6" : `1px solid ${wa.border}`, color: wa.text }}>
@@ -1187,7 +1203,7 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
                     {/* Step 2 — Estilista */}
                     {citaStep === 2 && (<div className="space-y-1.5">
                       <p className="text-[11px] font-semibold" style={{ color: wa.text }}>Elige estilista</p>
-                      {CITA_ESTILISTAS.map(e => (
+                      {citaEstilistas.map(e => (
                         <button key={e.name} onClick={() => { setCitaData(d => ({ ...d, estilista: e.name })); setCitaStep(3); }}
                           className="w-full text-left px-3 py-2.5 rounded-lg text-xs transition-all"
                           style={{ backgroundColor: citaData.estilista === e.name ? "#3B82F615" : "transparent", border: citaData.estilista === e.name ? "1.5px solid #3B82F6" : `1px solid ${wa.border}`, color: wa.text }}>

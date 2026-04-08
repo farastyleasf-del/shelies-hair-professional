@@ -292,8 +292,9 @@ function MiniCalendar({ selected, onSelect }: { selected: string | null; onSelec
 
 type BData = { servicio: string; precio: number; estilista: string; fecha: string | null; hora: string | null; nombre: string; telefono: string; email: string };
 
-function BookingModal({ initial, onClose, serviciosMenu }: { initial?: string; onClose: () => void; serviciosMenu?: { name: string; price: number }[] }) {
+function BookingModal({ initial, onClose, serviciosMenu, estilistasMenu }: { initial?: string; onClose: () => void; serviciosMenu?: { name: string; price: number }[]; estilistasMenu?: typeof ESTILISTAS }) {
   const MENU = serviciosMenu ?? SERVICIOS_MENU;
+  const ESTILISTAS_LIST = estilistasMenu ?? ESTILISTAS;
   const [step, setStep] = useState(1);
   const [d, setD] = useState<BData>({ servicio: initial || "", precio: 0, estilista: "", fecha: null, hora: null, nombre: "", telefono: "", email: "" });
   const [submitting, setSubmitting] = useState(false);
@@ -433,7 +434,7 @@ function BookingModal({ initial, onClose, serviciosMenu }: { initial?: string; o
             <div>
               <h3 className="font-poppins font-semibold text-base text-carbon mb-4">¿Con quién quieres tu cita?</h3>
               <div className="space-y-3">
-                {ESTILISTAS.map((e) => (
+                {ESTILISTAS_LIST.map((e) => (
                   <button key={e.id} onClick={() => setD((p) => ({ ...p, estilista: e.name }))}
                     className={`w-full text-left p-4 rounded-2xl border-2 flex items-center gap-4 transition-all ${
                       d.estilista === e.name ? "border-fucsia bg-fucsia/5" : "border-blush/60 hover:border-rosa"
@@ -619,6 +620,7 @@ export default function ServiciosPage() {
   const [dbProcesos, setDbProcesos] = useState<DBService[] | null>(null);
   const [dbAdicionales, setDbAdicionales] = useState<DBService[] | null>(null);
   const [menuServicios, setMenuServicios] = useState(SERVICIOS_MENU);
+  const [estilistasDB, setEstilistasDB] = useState(ESTILISTAS);
 
   useEffect(() => {
     fetch(apiUrl("/api/services"))
@@ -631,6 +633,25 @@ export default function ServiciosPage() {
           if (allServices.length > 0) {
             setMenuServicios(allServices.map((s) => ({ name: s.title, price: s.price! })));
           }
+        }
+      })
+      .catch(() => {});
+    // Cargar estilistas desde API
+    fetch(apiUrl("/api/services/stylists/list"))
+      .then(r => r.json())
+      .then((d: { success?: boolean; data?: Array<{ id: number; name: string; role: string; photo: string | null; specialties: string[]; is_active: boolean }> }) => {
+        const arr = d.data ?? (Array.isArray(d) ? d as Array<{ id: number; name: string; role: string; photo: string | null; specialties: string[]; is_active: boolean }> : []);
+        const active = arr.filter(s => s.is_active !== false);
+        if (active.length > 0) {
+          setEstilistasDB(active.map((s, i) => ({
+            id: String(s.id),
+            name: s.name,
+            role: s.role || "Estilista",
+            specialty: s.specialties ?? [],
+            initials: s.name.charAt(0),
+            color: i % 2 === 0 ? "#D93879" : "#5E0B2B",
+            image: s.photo || "/images/services/resultado-1.jpg",
+          })));
         }
       })
       .catch(() => {});
@@ -872,7 +893,7 @@ export default function ServiciosPage() {
       </div>
 
       {/* Modal */}
-      {booking.open && <BookingModal initial={booking.initial} onClose={() => setBooking({ open: false })} serviciosMenu={menuServicios} />}
+      {booking.open && <BookingModal initial={booking.initial} onClose={() => setBooking({ open: false })} serviciosMenu={menuServicios} estilistasMenu={estilistasDB} />}
     </div>
   );
 }
