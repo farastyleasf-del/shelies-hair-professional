@@ -598,6 +598,45 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
     } catch { setCitaErr("Error de conexión."); }
     finally { setCitaSaving(false); }
   }
+  async function handleCancelAppt(apptId: number, date: string) {
+    const apptDate = new Date(date + "T00:00:00");
+    const now = new Date();
+    const hoursUntil = (apptDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+    if (hoursUntil < 24) {
+      alert("No se puede cancelar con menos de 24 horas de anticipación.");
+      return;
+    }
+    if (!confirm("¿Cancelar esta cita?")) return;
+    try {
+      await agenteFetch(apiUrl(`/api/appointments/${apptId}`), {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "cancelado" }),
+      });
+      loadAppointments();
+    } catch { alert("Error al cancelar"); }
+  }
+
+  async function handleReagendarAppt(apptId: number, date: string, timeSlot: string) {
+    const apptDate = new Date(date + "T00:00:00");
+    const now = new Date();
+    const hoursUntil = (apptDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+    if (hoursUntil < 24) {
+      alert("No se puede reagendar con menos de 24 horas de anticipación.");
+      return;
+    }
+    const newDate = prompt("Nueva fecha (YYYY-MM-DD):", date);
+    if (!newDate) return;
+    const newTime = prompt("Nueva hora (08:00, 12:00 o 16:00):", timeSlot);
+    if (!newTime || !["08:00", "12:00", "16:00"].includes(newTime)) { alert("Hora inválida. Usa 08:00, 12:00 o 16:00"); return; }
+    try {
+      await agenteFetch(apiUrl(`/api/appointments/${apptId}`), {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: newDate, time_slot: newTime }),
+      });
+      loadAppointments();
+    } catch { alert("Error al reagendar"); }
+  }
+
   function resetCita() {
     setCitaStep(1);
     setCitaData({ servicio: "", precio: 0, estilista: "", fecha: "", hora: "", nombre: conv?.customerName ?? "", telefono: conv?.customerId ?? "", email: "", notas: "" });
@@ -1267,9 +1306,23 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
                                 ) : (
                                   <div className="flex-1 min-w-0">
                                     {slotAppts.map(a => (
-                                      <p key={a.id} className="truncate" style={{ color: wa.text }}>
-                                        {a.client_name} {a.notes ? `· ${a.notes.split("|")[0]?.trim()}` : ""}
-                                      </p>
+                                      <div key={a.id}>
+                                        <p className="truncate" style={{ color: wa.text }}>
+                                          {a.client_name} {a.notes ? `· ${a.notes.split("|")[0]?.trim()}` : ""}
+                                        </p>
+                                        <div className="flex gap-1 mt-0.5">
+                                          <button onClick={() => handleCancelAppt(a.id, a.date)}
+                                            className="text-[8px] px-1.5 py-0.5 rounded font-medium"
+                                            style={{ color: "#DC2626", backgroundColor: "#FEF2F2", border: "1px solid #FECACA" }}>
+                                            Cancelar
+                                          </button>
+                                          <button onClick={() => handleReagendarAppt(a.id, a.date, a.time_slot)}
+                                            className="text-[8px] px-1.5 py-0.5 rounded font-medium"
+                                            style={{ color: "#2563EB", backgroundColor: "#EFF6FF", border: "1px solid #BFDBFE" }}>
+                                            Reagendar
+                                          </button>
+                                        </div>
+                                      </div>
                                     ))}
                                   </div>
                                 )}

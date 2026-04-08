@@ -222,11 +222,42 @@ export default function AdminCitas() {
                 </div>
               ))}
             </div>
-            <a href={`https://wa.me/57${selected.telefono.replace(/\D/g,"")}?text=${encodeURIComponent(`Hola ${selected.nombre.split(" ")[0]}, te confirmamos tu cita en Shelie's Hair Professional el ${selected.fecha} a las ${selected.hora}. ¡Te esperamos! 💫`)}`}
-              target="_blank" rel="noopener noreferrer"
-              className="mt-5 w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-xl text-sm transition-colors">
-              📲 Contactar por WhatsApp
-            </a>
+            <div className="mt-5 space-y-2">
+              <a href={`https://wa.me/57${selected.telefono.replace(/\D/g,"")}?text=${encodeURIComponent(`Hola ${selected.nombre.split(" ")[0]}, te confirmamos tu cita en Shelie's Hair Professional el ${selected.fecha} a las ${selected.hora}. Te esperamos!`)}`}
+                target="_blank" rel="noopener noreferrer"
+                className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-xl text-sm transition-colors">
+                Contactar por WhatsApp
+              </a>
+              {selected.estado !== "cancelado" && (
+                <button onClick={async () => {
+                  if (!confirm("¿Cancelar esta cita?")) return;
+                  try {
+                    await authedFetch(apiUrl(`/api/appointments/${selected.id}`), {
+                      method: "PATCH", headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ status: "cancelado" }),
+                    });
+                    setCitas(prev => prev.map(c => c.id === selected.id ? { ...c, estado: "cancelado" } : c));
+                    setSelected(null);
+                  } catch { alert("Error al cancelar"); }
+                }}
+                  className="w-full py-2.5 rounded-xl text-sm font-semibold transition-colors"
+                  style={{ backgroundColor: "rgba(239,68,68,0.15)", color: "#F87171", border: "1px solid rgba(239,68,68,0.3)" }}>
+                  Cancelar cita
+                </button>
+              )}
+              <button onClick={async () => {
+                if (!confirm("¿Eliminar esta cita permanentemente?")) return;
+                try {
+                  await authedFetch(apiUrl(`/api/appointments/${selected.id}`), { method: "DELETE" });
+                  setCitas(prev => prev.filter(c => c.id !== selected.id));
+                  setSelected(null);
+                } catch { alert("Error al eliminar"); }
+              }}
+                className="w-full py-2.5 rounded-xl text-sm font-medium transition-colors"
+                style={{ color: "rgba(255,255,255,0.4)", border: "1px solid rgba(255,255,255,0.1)" }}>
+                Eliminar permanentemente
+              </button>
+            </div>
           </div>
         </div>
       )}

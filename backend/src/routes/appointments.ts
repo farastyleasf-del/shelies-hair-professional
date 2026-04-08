@@ -159,4 +159,47 @@ router.post("/", async (req: Request, res: Response) => {
   }
 });
 
+/* ── PATCH /:id — actualizar cita (cancelar, reagendar, cambiar estado) ── */
+router.patch("/:id", async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) { res.status(400).json({ error: "ID inválido" }); return; }
+    const { status, date, time_slot, notes } = req.body as {
+      status?: string; date?: string; time_slot?: string; notes?: string;
+    };
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    let i = 1;
+    if (status !== undefined)    { sets.push(`status = $${i++}`); params.push(status); }
+    if (date !== undefined)      { sets.push(`date = $${i++}`); params.push(date); }
+    if (time_slot !== undefined) { sets.push(`time_slot = $${i++}`); params.push(time_slot); }
+    if (notes !== undefined)     { sets.push(`notes = $${i++}`); params.push(notes); }
+    if (sets.length === 0) { res.status(400).json({ error: "Nada que actualizar" }); return; }
+    sets.push(`updated_at = NOW()`);
+    params.push(id);
+    const rows = await query(
+      `UPDATE bbdd_shelies.appointments SET ${sets.join(", ")} WHERE id = $${i} RETURNING *`, params
+    );
+    if (rows.length === 0) { res.status(404).json({ error: "Cita no encontrada" }); return; }
+    res.json({ success: true, data: rows[0] });
+  } catch (e) {
+    console.error("PATCH /appointments:", e);
+    res.status(500).json({ error: "Error al actualizar cita" });
+  }
+});
+
+/* ── DELETE /:id — eliminar cita (admin) ── */
+router.delete("/:id", async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) { res.status(400).json({ error: "ID inválido" }); return; }
+    const rows = await query(`DELETE FROM bbdd_shelies.appointments WHERE id = $1 RETURNING id`, [id]);
+    if (rows.length === 0) { res.status(404).json({ error: "Cita no encontrada" }); return; }
+    res.json({ success: true });
+  } catch (e) {
+    console.error("DELETE /appointments:", e);
+    res.status(500).json({ error: "Error al eliminar cita" });
+  }
+});
+
 export default router;
