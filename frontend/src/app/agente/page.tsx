@@ -529,7 +529,9 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
   const [stylists, setStylists] = useState<StylistOpt[]>([]);
   const [allAppts, setAllAppts] = useState<AppointmentRow[]>([]);
   const [citaStep, setCitaStep] = useState(1);
-  const [citaData, setCitaData] = useState({ servicio: "", precio: 0, estilista: "", fecha: "", hora: "", nombre: "", telefono: "", email: "", notas: "" });
+  const [citaData, setCitaData] = useState({ servicio: "", precio: 0, estilista: "", fecha: "", hora: "", nombre: "", telefono: "", email: "", notas: "", tipo: "normal" as "normal" | "garantia" });
+  const [citaPagoConfirmado, setCitaPagoConfirmado] = useState(false);
+  const [citaLinkEnviado, setCitaLinkEnviado] = useState(false);
   const [citaSaving, setCitaSaving] = useState(false);
   const [citaDone, setCitaDone] = useState<string | null>(null);
   const [citaErr, setCitaErr] = useState("");
@@ -590,22 +592,28 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
 
   async function handleCreateCita() {
     if (!citaData.servicio || !citaData.fecha || !citaData.hora) { setCitaErr("Completa todos los pasos."); return; }
+    if (citaData.tipo === "normal" && !citaPagoConfirmado) { setCitaErr("Debes confirmar el pago antes de agendar."); return; }
     setCitaSaving(true); setCitaErr(""); setCitaDone(null);
     try {
+      const isGarantia = citaData.tipo === "garantia";
       const res = await agenteFetch(apiUrl("/api/appointments"), {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           service_id: null, stylist_id: null,
           client_name: citaData.nombre, client_phone: citaData.telefono, client_email: citaData.email,
           date: citaData.fecha, time_slot: citaData.hora,
-          status: "pendiente", notes: `Servicio: ${citaData.servicio} | Estilista: ${citaData.estilista || "Sin preferencia"} | Agendada por agente${citaData.notas ? ` | Notas: ${citaData.notas}` : ""}`,
+          status: isGarantia ? "confirmada" : "confirmada",
+          notes: `Servicio: ${citaData.servicio} | Estilista: ${citaData.estilista || "Sin preferencia"} | ${isGarantia ? "GARANTÍA" : "Pago confirmado"} | Agendada por agente${citaData.notas ? ` | Notas: ${citaData.notas}` : ""}`,
           service_name: citaData.servicio, stylist_name: citaData.estilista || "",
         }),
       });
       if (res.ok) {
+        const data = await res.json() as { data?: { id: number } };
+        const citaId = data.data?.id ?? "";
         const est = citaData.estilista ? ` con ${citaData.estilista}` : "";
         const fechaFmt = new Date(citaData.fecha + "T12:00:00").toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" });
-        setCitaDone(`*${citaData.servicio}*${est}\n${fechaFmt} a las ${CITA_HOUR_LABELS[citaData.hora]}\nValor: ${fmtCOP(citaData.precio)}\nSeña: $30.000`);
+        const tipoLabel = isGarantia ? "\nTipo: GARANTÍA (sin costo)" : `\nValor: ${fmtCOP(citaData.precio)}\nSeña: $30.000 — Pagada`;
+        setCitaDone(`N° Cita: ${citaId}\n*${citaData.servicio}*${est}\n${fechaFmt} a las ${CITA_HOUR_LABELS[citaData.hora]}${tipoLabel}`);
         loadAppointments();
       } else {
         const e = await res.json() as { error?: string };
@@ -655,8 +663,8 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
 
   function resetCita() {
     setCitaStep(1);
-    setCitaData({ servicio: "", precio: 0, estilista: "", fecha: "", hora: "", nombre: conv?.customerName ?? "", telefono: conv?.customerId ?? "", email: "", notas: "" });
-    setCitaDone(null); setCitaErr("");
+    setCitaData({ servicio: "", precio: 0, estilista: "", fecha: "", hora: "", nombre: conv?.customerName ?? "", telefono: conv?.customerId ?? "", email: "", notas: "", tipo: "normal" });
+    setCitaDone(null); setCitaErr(""); setCitaPagoConfirmado(false); setCitaLinkEnviado(false);
   }
   const messagesEnd = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1178,10 +1186,8 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
                   <div className="rounded-xl p-3 text-xs space-y-1.5" style={{ backgroundColor: wa.mode === "dark" ? "#3B82F620" : "#EFF6FF", border: "1px solid #3B82F6aa" }}>
                     <p className="font-bold" style={{ color: "#3B82F6" }}>Cita agendada</p>
                     <p className="whitespace-pre-line" style={{ color: wa.textMuted }}>{citaDone}</p>
-                    <button onClick={() => onSend(`Hola ${citaData.nombre.split(" ")[0]},\n\nTu cita ha sido agendada:\n${citaDone}\n\nPara confirmar tu reserva, realiza el pago de la seña a través de este enlace:\n${MP_LINK}\n\nUna vez realizado el pago, envíanos el comprobante por este chat.\n\nTe esperamos en *Shelie's Hair Studio*.`)}
-                      className="w-full py-1.5 rounded-lg text-white text-xs font-medium" style={{ backgroundColor: wa.green }}>Enviar confirmación + link de pago</button>
-                    <button onClick={() => onSend(`Hola ${citaData.nombre.split(" ")[0]},\n\nTu cita ha sido agendada:\n${citaDone}\n\nTe esperamos en *Shelie's Hair Studio*.`)}
-                      className="w-full py-1.5 rounded-lg text-xs font-medium" style={{ backgroundColor: "transparent", color: wa.green, border: `1px solid ${wa.green}` }}>Solo confirmación</button>
+                    <button onClick={() => onSend(`Hola ${citaData.nombre.split(" ")[0]},\n\nTu cita ha sido confirmada:\n${citaDone}\n\nTe esperamos en *Shelie's Hair Studio*.`)}
+                      className="w-full py-1.5 rounded-lg text-white text-xs font-medium" style={{ backgroundColor: wa.green }}>Enviar confirmación al cliente</button>
                     <button onClick={resetCita} className="w-full py-1 text-xs hover:underline" style={{ color: "#3B82F6" }}>Agendar otra</button>
                   </div>
                 ) : (
@@ -1257,20 +1263,86 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
                     {/* Step 5 — Resumen */}
                     {citaStep === 5 && (<div className="space-y-2">
                       <p className="text-[11px] font-semibold" style={{ color: wa.text }}>Confirmar cita</p>
+
+                      {/* Tipo de cita */}
+                      <div className="flex gap-1.5">
+                        <button onClick={() => setCitaData(d => ({ ...d, tipo: "normal" }))}
+                          className="flex-1 py-2 rounded-lg text-[10px] font-semibold"
+                          style={{ backgroundColor: citaData.tipo === "normal" ? "#3B82F6" : (wa.mode === "dark" ? "#2A3942" : "#F3F4F6"), color: citaData.tipo === "normal" ? "#fff" : wa.text, border: citaData.tipo === "normal" ? "2px solid #3B82F6" : `1px solid ${wa.border}` }}>
+                          Normal
+                        </button>
+                        <button onClick={() => { setCitaData(d => ({ ...d, tipo: "garantia" })); setCitaPagoConfirmado(false); setCitaLinkEnviado(false); }}
+                          className="flex-1 py-2 rounded-lg text-[10px] font-semibold"
+                          style={{ backgroundColor: citaData.tipo === "garantia" ? "#F59E0B" : (wa.mode === "dark" ? "#2A3942" : "#F3F4F6"), color: citaData.tipo === "garantia" ? "#fff" : wa.text, border: citaData.tipo === "garantia" ? "2px solid #F59E0B" : `1px solid ${wa.border}` }}>
+                          Garantía
+                        </button>
+                      </div>
+
+                      {/* Resumen */}
                       <div className="rounded-lg p-2.5 text-[10px] space-y-1.5" style={{ backgroundColor: wa.panelItemBg, border: `1px solid ${wa.border}` }}>
                         {[{ l: "Servicio", v: citaData.servicio }, { l: "Estilista", v: citaData.estilista || "Sin preferencia" },
                           { l: "Fecha", v: citaData.fecha ? new Date(citaData.fecha + "T12:00:00").toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" }) : "" },
                           { l: "Hora", v: CITA_HOUR_LABELS[citaData.hora] ?? "" }, { l: "Cliente", v: citaData.nombre }, { l: "WhatsApp", v: citaData.telefono },
+                          { l: "Tipo", v: citaData.tipo === "garantia" ? "GARANTÍA (sin costo)" : "Normal" },
                           ...(citaData.notas ? [{ l: "Notas", v: citaData.notas }] : [])
                         ].map(r => (<div key={r.l} className="flex justify-between"><span style={{ color: wa.textFaint }}>{r.l}</span><span className="font-semibold text-right" style={{ color: wa.text }}>{r.v}</span></div>))}
                       </div>
-                      <div className="rounded-lg p-2.5 text-[10px]" style={{ backgroundColor: wa.mode === "dark" ? "#1a2e1a" : "#F0FDF4", border: "1px solid #16A34A40" }}>
-                        <div className="flex justify-between"><span style={{ color: wa.textMuted }}>Valor servicio</span><span style={{ color: wa.text }}>{fmtCOP(citaData.precio)}</span></div>
-                        <div className="flex justify-between font-bold mt-1 pt-1" style={{ borderTop: "1px solid #16A34A30", color: "#16A34A" }}><span>Seña a pagar</span><span>$30.000</span></div>
-                      </div>
-                      <button onClick={handleCreateCita} disabled={citaSaving} className="w-full py-2 rounded-xl text-white text-xs font-semibold disabled:opacity-40" style={{ backgroundColor: "#3B82F6" }}>
-                        {citaSaving ? "Agendando…" : "Confirmar cita"}
-                      </button>
+
+                      {/* Garantía — directo, sin pago */}
+                      {citaData.tipo === "garantia" && (
+                        <div className="rounded-lg p-2 text-[10px]" style={{ backgroundColor: wa.mode === "dark" ? "#2a2a1a" : "#FFFBEB", border: "1px solid #F59E0B40" }}>
+                          <p style={{ color: "#F59E0B" }} className="font-semibold">Cita de garantía — sin costo</p>
+                          <p style={{ color: wa.textFaint }}>Se agenda directamente sin link de pago.</p>
+                        </div>
+                      )}
+
+                      {/* Normal — flujo de pago */}
+                      {citaData.tipo === "normal" && (
+                        <>
+                          <div className="rounded-lg p-2.5 text-[10px]" style={{ backgroundColor: wa.mode === "dark" ? "#1a2e1a" : "#F0FDF4", border: "1px solid #16A34A40" }}>
+                            <div className="flex justify-between"><span style={{ color: wa.textMuted }}>Valor servicio</span><span style={{ color: wa.text }}>{fmtCOP(citaData.precio)}</span></div>
+                            <div className="flex justify-between font-bold mt-1 pt-1" style={{ borderTop: "1px solid #16A34A30", color: "#16A34A" }}><span>Seña a pagar</span><span>$30.000</span></div>
+                          </div>
+
+                          {/* Paso 1: Enviar link de pago */}
+                          {!citaLinkEnviado && (
+                            <button onClick={async () => {
+                              await onSend(`Hola ${citaData.nombre.split(" ")[0]},\n\nPara confirmar tu cita de *${citaData.servicio}*, realiza el pago de la seña ($30.000) a través de este enlace:\n\n${MP_LINK}\n\nUna vez realizado, envíanos el comprobante por este chat.`);
+                              setCitaLinkEnviado(true);
+                            }} disabled={sending}
+                              className="w-full py-2 rounded-xl text-white text-xs font-semibold disabled:opacity-40" style={{ backgroundColor: wa.green }}>
+                              {sending ? "Enviando..." : "Enviar link de pago al cliente"}
+                            </button>
+                          )}
+
+                          {/* Paso 2: Esperar comprobante y confirmar pago */}
+                          {citaLinkEnviado && !citaPagoConfirmado && (
+                            <div className="rounded-lg p-2.5 text-[10px] space-y-2" style={{ backgroundColor: wa.mode === "dark" ? "#1a1a2e" : "#EFF6FF", border: "1px solid #3B82F640" }}>
+                              <p style={{ color: "#3B82F6" }} className="font-semibold">Link de pago enviado</p>
+                              <p style={{ color: wa.textFaint }}>Espera a que el cliente envíe el comprobante de pago por este chat. Una vez lo recibas, marca como pagado.</p>
+                              <button onClick={() => setCitaPagoConfirmado(true)}
+                                className="w-full py-2 rounded-lg text-white text-xs font-semibold flex items-center justify-center gap-2" style={{ backgroundColor: "#16A34A" }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                Pago recibido — Confirmar
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Paso 3: Pago confirmado — puede agendar */}
+                          {citaPagoConfirmado && (
+                            <div className="rounded-lg p-2 text-[10px]" style={{ backgroundColor: wa.mode === "dark" ? "#0f2a1f" : "#F0FDF4", border: "1px solid #16A34A60" }}>
+                              <p style={{ color: "#16A34A" }} className="font-semibold">Pago confirmado</p>
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      {/* Botón de agendar — solo si garantía O pago confirmado */}
+                      {(citaData.tipo === "garantia" || citaPagoConfirmado) && (
+                        <button onClick={handleCreateCita} disabled={citaSaving} className="w-full py-2 rounded-xl text-white text-xs font-semibold disabled:opacity-40" style={{ backgroundColor: "#3B82F6" }}>
+                          {citaSaving ? "Agendando…" : citaData.tipo === "garantia" ? "Agendar garantía" : "Agendar cita (pago confirmado)"}
+                        </button>
+                      )}
                     </div>)}
 
                     {/* Nav */}
