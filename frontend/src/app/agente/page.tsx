@@ -528,12 +528,22 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
   const [services, setServices] = useState<ServiceOpt[]>([]);
   const [stylists, setStylists] = useState<StylistOpt[]>([]);
   const [allAppts, setAllAppts] = useState<AppointmentRow[]>([]);
-  const [citaForm, setCitaForm] = useState({ servicio: "", estilista: "", fecha: "", hora: "08:00" });
+  const [citaStep, setCitaStep] = useState(1);
+  const [citaData, setCitaData] = useState({ servicio: "", precio: 0, estilista: "", fecha: "", hora: "", nombre: "", telefono: "", email: "" });
   const [citaSaving, setCitaSaving] = useState(false);
   const [citaDone, setCitaDone] = useState<string | null>(null);
   const [citaErr, setCitaErr] = useState("");
-  const CITA_HOURS = ["08:00", "12:00", "16:00"];
+  const CITA_SLOTS = [{ label: "8:00 AM", value: "08:00" }, { label: "12:00 PM", value: "12:00" }, { label: "4:00 PM", value: "16:00" }];
   const CITA_HOUR_LABELS: Record<string, string> = { "08:00": "8:00 AM", "12:00": "12:00 PM", "16:00": "4:00 PM" };
+  const CITA_SERVICIOS = [
+    { name: "Alisado Orgánico Efecto Shelie's", price: 350000 }, { name: "Botox Capilar Canela", price: 280000 },
+    { name: "Terapia Total Scalp", price: 220000 }, { name: "Terapia de Reconstrucción", price: 200000 },
+    { name: "Repolarización — Cronograma Capilar", price: 180000 }, { name: "Nano Cristalización (+$50.000)", price: 50000 },
+    { name: "Corte Bordado (+$40.000)", price: 40000 }, { name: "Luz Fotónica / Infrarroja (+$40.000)", price: 40000 },
+    { name: "Terapia de Ozono (+$50.000)", price: 50000 },
+  ];
+  const CITA_ESTILISTAS = [{ name: "Shelie", role: "Fundadora — Alisados" }, { name: "Valentina", role: "Tratamientos Capilares" }];
+  const MP_LINK = "https://link.mercadopago.com.co/shelieshairstudio";
 
   // Cargar servicios y estilistas
   useEffect(() => {
@@ -563,28 +573,23 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
   useEffect(() => { loadAppointments(); }, []);
 
   async function handleCreateCita() {
-    if (!citaForm.servicio || !citaForm.fecha || !citaForm.hora) { setCitaErr("Servicio, fecha y hora son obligatorios."); return; }
-    if (!conv) return;
+    if (!citaData.servicio || !citaData.fecha || !citaData.hora) { setCitaErr("Completa todos los pasos."); return; }
     setCitaSaving(true); setCitaErr(""); setCitaDone(null);
     try {
-      const svc = services.find(s => s.title === citaForm.servicio);
       const res = await agenteFetch(apiUrl("/api/appointments"), {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          service_id: svc?.id ?? null,
-          stylist_id: stylists.find(s => s.name === citaForm.estilista)?.id ?? null,
-          client_name: conv.customerName, client_phone: conv.customerId, client_email: "",
-          date: citaForm.fecha, time_slot: citaForm.hora,
-          status: "pendiente", notes: `Servicio: ${citaForm.servicio} | Estilista: ${citaForm.estilista || "Sin preferencia"} | Agendada por agente`,
-          service_name: citaForm.servicio, stylist_name: citaForm.estilista || "",
+          service_id: null, stylist_id: null,
+          client_name: citaData.nombre, client_phone: citaData.telefono, client_email: citaData.email,
+          date: citaData.fecha, time_slot: citaData.hora,
+          status: "pendiente", notes: `Servicio: ${citaData.servicio} | Estilista: ${citaData.estilista || "Sin preferencia"} | Agendada por agente`,
+          service_name: citaData.servicio, stylist_name: citaData.estilista || "",
         }),
       });
       if (res.ok) {
-        const svcPrice = svc ? fmtCOP(Number(svc.price)) : "";
-        const estilistaText = citaForm.estilista ? ` con ${citaForm.estilista}` : "";
-        const fechaFormatted = new Date(citaForm.fecha + "T12:00:00").toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" });
-        setCitaDone(`*${citaForm.servicio}*${estilistaText}\n${fechaFormatted} a las ${CITA_HOUR_LABELS[citaForm.hora]}${svcPrice ? `\nValor: ${svcPrice}` : ""}`);
-        setCitaForm({ servicio: "", estilista: "", fecha: "", hora: "08:00" });
+        const est = citaData.estilista ? ` con ${citaData.estilista}` : "";
+        const fechaFmt = new Date(citaData.fecha + "T12:00:00").toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" });
+        setCitaDone(`*${citaData.servicio}*${est}\n${fechaFmt} a las ${CITA_HOUR_LABELS[citaData.hora]}\nValor: ${fmtCOP(citaData.precio)}\nSeña: $30.000`);
         loadAppointments();
       } else {
         const e = await res.json() as { error?: string };
@@ -592,6 +597,11 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
       }
     } catch { setCitaErr("Error de conexión."); }
     finally { setCitaSaving(false); }
+  }
+  function resetCita() {
+    setCitaStep(1);
+    setCitaData({ servicio: "", precio: 0, estilista: "", fecha: "", hora: "", nombre: conv?.customerName ?? "", telefono: conv?.customerId ?? "", email: "" });
+    setCitaDone(null); setCitaErr("");
   }
   const messagesEnd = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1103,102 +1113,112 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
             {/* ── Agendar cita ── */}
             {panelTab === "cita" && (
               <div className="space-y-2.5">
-                <p className="text-xs font-semibold" style={{ color: wa.textMuted }}>Agendar cita para el cliente</p>
+                {/* Progress bar */}
+                <div className="flex items-center gap-1">
+                  {[1,2,3,4,5].map(s => (<div key={s} style={{ flex: 1, height: 3, borderRadius: 2, backgroundColor: s <= citaStep ? "#3B82F6" : (wa.mode === "dark" ? "#333" : "#E5E7EB") }} />))}
+                </div>
+                <p className="text-[10px]" style={{ color: wa.textFaint }}>Paso {citaStep}/5 — {["","Servicio","Estilista","Fecha y hora","Datos cliente","Confirmar"][citaStep]}</p>
 
                 {citaDone ? (
-                  <div className="rounded-xl p-3 text-xs space-y-1.5"
-                    style={{ backgroundColor: wa.mode === "dark" ? "#3B82F620" : "#EFF6FF", border: "1px solid #3B82F6aa" }}>
+                  <div className="rounded-xl p-3 text-xs space-y-1.5" style={{ backgroundColor: wa.mode === "dark" ? "#3B82F620" : "#EFF6FF", border: "1px solid #3B82F6aa" }}>
                     <p className="font-bold" style={{ color: "#3B82F6" }}>Cita agendada</p>
-                    <p style={{ color: wa.textMuted }}>{citaDone}</p>
-                    <button
-                      onClick={() => onSend(`Hola ${conv?.customerName?.split(" ")[0] ?? ""},\n\nTu cita ha sido agendada:\n${citaDone}\n\nPara confirmar tu reserva, realiza el pago de la seña a través de este enlace:\nhttps://link.mercadopago.com.co/shelieshairstudio\n\nUna vez realizado el pago, envíanos el comprobante por este chat.\n\nTe esperamos en *Shelie's Hair Studio*.`)}
-                      className="w-full py-1.5 rounded-lg text-white text-xs font-medium"
-                      style={{ backgroundColor: wa.green }}>
-                      Enviar confirmación + link de pago
-                    </button>
-                    <button
-                      onClick={() => onSend(`Hola ${conv?.customerName?.split(" ")[0] ?? ""},\n\nTu cita ha sido agendada:\n${citaDone}\n\nTe esperamos en *Shelie's Hair Studio*.`)}
-                      className="w-full py-1.5 rounded-lg text-xs font-medium"
-                      style={{ backgroundColor: "transparent", color: wa.green, border: `1px solid ${wa.green}` }}>
-                      Enviar solo confirmación
-                    </button>
-                    <button onClick={() => setCitaDone(null)}
-                      className="w-full py-1 text-xs hover:underline" style={{ color: "#3B82F6" }}>
-                      Agendar otra
-                    </button>
+                    <p className="whitespace-pre-line" style={{ color: wa.textMuted }}>{citaDone}</p>
+                    <button onClick={() => onSend(`Hola ${citaData.nombre.split(" ")[0]},\n\nTu cita ha sido agendada:\n${citaDone}\n\nPara confirmar tu reserva, realiza el pago de la seña a través de este enlace:\n${MP_LINK}\n\nUna vez realizado el pago, envíanos el comprobante por este chat.\n\nTe esperamos en *Shelie's Hair Studio*.`)}
+                      className="w-full py-1.5 rounded-lg text-white text-xs font-medium" style={{ backgroundColor: wa.green }}>Enviar confirmación + link de pago</button>
+                    <button onClick={() => onSend(`Hola ${citaData.nombre.split(" ")[0]},\n\nTu cita ha sido agendada:\n${citaDone}\n\nTe esperamos en *Shelie's Hair Studio*.`)}
+                      className="w-full py-1.5 rounded-lg text-xs font-medium" style={{ backgroundColor: "transparent", color: wa.green, border: `1px solid ${wa.green}` }}>Solo confirmación</button>
+                    <button onClick={resetCita} className="w-full py-1 text-xs hover:underline" style={{ color: "#3B82F6" }}>Agendar otra</button>
                   </div>
                 ) : (
                   <>
-                    {citaErr && (
-                      <p className="text-xs text-red-500 rounded-lg px-3 py-2"
-                        style={{ backgroundColor: wa.mode === "dark" ? "#ff000020" : "#fff5f5" }}>
-                        {citaErr}
-                      </p>
-                    )}
-                    <div>
-                      <label className="text-[10px] font-medium mb-0.5 block" style={{ color: wa.textFaint }}>Servicio *</label>
-                      <select value={citaForm.servicio}
-                        onChange={e => setCitaForm(f => ({ ...f, servicio: e.target.value }))}
-                        className="w-full text-xs border rounded-lg px-3 py-1.5 outline-none"
-                        style={{ backgroundColor: wa.inputFieldBg, borderColor: wa.border, color: wa.text }}>
-                        <option value="">Seleccionar servicio...</option>
-                        {services.map(s => (
-                          <option key={s.id} value={s.title}>{s.title} — {fmtCOP(Number(s.price))}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-medium mb-0.5 block" style={{ color: wa.textFaint }}>Estilista</label>
-                      <select value={citaForm.estilista}
-                        onChange={e => setCitaForm(f => ({ ...f, estilista: e.target.value }))}
-                        className="w-full text-xs border rounded-lg px-3 py-1.5 outline-none"
-                        style={{ backgroundColor: wa.inputFieldBg, borderColor: wa.border, color: wa.text }}>
-                        <option value="">Sin preferencia</option>
-                        {stylists.map(s => (
-                          <option key={s.id} value={s.name}>{s.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-medium mb-0.5 block" style={{ color: wa.textFaint }}>Fecha *</label>
-                      <input type="date" value={citaForm.fecha}
-                        min={new Date().toISOString().slice(0, 10)}
-                        onChange={e => setCitaForm(f => ({ ...f, fecha: e.target.value }))}
-                        className="w-full text-xs border rounded-lg px-3 py-1.5 outline-none"
+                    {citaErr && <p className="text-xs text-red-500 rounded-lg px-3 py-2" style={{ backgroundColor: wa.mode === "dark" ? "#ff000020" : "#fff5f5" }}>{citaErr}</p>}
+
+                    {/* Step 1 — Servicio */}
+                    {citaStep === 1 && (<div className="space-y-1">
+                      <p className="text-[11px] font-semibold" style={{ color: wa.text }}>Selecciona el servicio</p>
+                      {CITA_SERVICIOS.map(s => (
+                        <button key={s.name} onClick={() => { setCitaData(d => ({ ...d, servicio: s.name, precio: s.price })); setCitaStep(2); }}
+                          className="w-full text-left px-3 py-2 rounded-lg text-xs transition-all"
+                          style={{ backgroundColor: citaData.servicio === s.name ? "#3B82F615" : "transparent", border: citaData.servicio === s.name ? "1.5px solid #3B82F6" : `1px solid ${wa.border}`, color: wa.text }}>
+                          <div className="flex justify-between"><span>{citaData.servicio === s.name ? "✓ " : ""}{s.name}</span><span className="font-semibold" style={{ color: wa.textFaint }}>{fmtCOP(s.price)}</span></div>
+                        </button>
+                      ))}
+                    </div>)}
+
+                    {/* Step 2 — Estilista */}
+                    {citaStep === 2 && (<div className="space-y-1.5">
+                      <p className="text-[11px] font-semibold" style={{ color: wa.text }}>Elige estilista</p>
+                      {CITA_ESTILISTAS.map(e => (
+                        <button key={e.name} onClick={() => { setCitaData(d => ({ ...d, estilista: e.name })); setCitaStep(3); }}
+                          className="w-full text-left px-3 py-2.5 rounded-lg text-xs transition-all"
+                          style={{ backgroundColor: citaData.estilista === e.name ? "#3B82F615" : "transparent", border: citaData.estilista === e.name ? "1.5px solid #3B82F6" : `1px solid ${wa.border}`, color: wa.text }}>
+                          <p className="font-semibold">{citaData.estilista === e.name ? "✓ " : ""}{e.name}</p>
+                          <p className="text-[10px]" style={{ color: wa.textFaint }}>{e.role}</p>
+                        </button>
+                      ))}
+                      <button onClick={() => { setCitaData(d => ({ ...d, estilista: "" })); setCitaStep(3); }}
+                        className="w-full text-left px-3 py-2 rounded-lg text-xs" style={{ border: `1px solid ${wa.border}`, color: wa.textMuted }}>Sin preferencia</button>
+                    </div>)}
+
+                    {/* Step 3 — Fecha y hora */}
+                    {citaStep === 3 && (<div className="space-y-2">
+                      <p className="text-[11px] font-semibold" style={{ color: wa.text }}>Fecha y hora</p>
+                      <input type="date" value={citaData.fecha} min={new Date().toISOString().slice(0, 10)}
+                        onChange={e => setCitaData(d => ({ ...d, fecha: e.target.value, hora: "" }))}
+                        className="w-full text-xs border rounded-lg px-3 py-2 outline-none"
                         style={{ backgroundColor: wa.inputFieldBg, borderColor: wa.border, color: wa.text }} />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-medium mb-0.5 block" style={{ color: wa.textFaint }}>Hora *</label>
-                      <div className="flex gap-1.5">
-                        {CITA_HOURS.map(h => {
-                          const isOccupied = allAppts.some(a => a.date === citaForm.fecha && a.time_slot === h && a.status !== "cancelado");
-                          return (
-                            <button key={h} onClick={() => !isOccupied && setCitaForm(f => ({ ...f, hora: h }))}
-                              disabled={isOccupied}
-                              className="flex-1 py-2 rounded-lg text-[10px] font-semibold transition-all disabled:opacity-30"
-                              style={{
-                                backgroundColor: citaForm.hora === h ? "#3B82F6" : (wa.mode === "dark" ? "#2A3942" : "#F3F4F6"),
-                                color: citaForm.hora === h ? "#fff" : wa.text,
-                                border: citaForm.hora === h ? "2px solid #3B82F6" : `1px solid ${wa.border}`,
-                              }}>
-                              {CITA_HOUR_LABELS[h]}
-                              {isOccupied && <span className="block text-[8px]" style={{ color: "#EF4444" }}>Ocupado</span>}
-                            </button>
-                          );
-                        })}
+                      {citaData.fecha && (<>
+                        <p className="text-[10px]" style={{ color: wa.textFaint }}>{new Date(citaData.fecha + "T12:00:00").toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" })}</p>
+                        <div className="flex gap-1.5">
+                          {CITA_SLOTS.map(h => {
+                            const occupied = allAppts.some(a => a.date === citaData.fecha && a.time_slot === h.value && a.status !== "cancelado");
+                            return (<button key={h.value} onClick={() => { if (!occupied) { setCitaData(d => ({ ...d, hora: h.value })); setCitaStep(4); } }} disabled={occupied}
+                              className="flex-1 py-2.5 rounded-lg text-[11px] font-semibold transition-all disabled:opacity-30"
+                              style={{ backgroundColor: citaData.hora === h.value ? "#3B82F6" : (wa.mode === "dark" ? "#2A3942" : "#F3F4F6"), color: citaData.hora === h.value ? "#fff" : wa.text, border: citaData.hora === h.value ? "2px solid #3B82F6" : `1px solid ${wa.border}` }}>
+                              {h.label}{occupied && <span className="block text-[8px]" style={{ color: "#EF4444" }}>Ocupado</span>}
+                            </button>);
+                          })}
+                        </div>
+                      </>)}
+                    </div>)}
+
+                    {/* Step 4 — Datos cliente */}
+                    {citaStep === 4 && (<div className="space-y-2">
+                      <p className="text-[11px] font-semibold" style={{ color: wa.text }}>Datos del cliente</p>
+                      <div><label className="text-[10px] font-medium mb-0.5 block" style={{ color: wa.textFaint }}>Nombre *</label>
+                        <input value={citaData.nombre} onChange={e => setCitaData(d => ({ ...d, nombre: e.target.value }))} placeholder="Nombre completo"
+                          className="w-full text-xs border rounded-lg px-3 py-1.5 outline-none" style={{ backgroundColor: wa.inputFieldBg, borderColor: wa.border, color: wa.text }} /></div>
+                      <div><label className="text-[10px] font-medium mb-0.5 block" style={{ color: wa.textFaint }}>WhatsApp *</label>
+                        <input value={citaData.telefono} onChange={e => setCitaData(d => ({ ...d, telefono: e.target.value }))} placeholder="3XX XXX XXXX" type="tel"
+                          className="w-full text-xs border rounded-lg px-3 py-1.5 outline-none" style={{ backgroundColor: wa.inputFieldBg, borderColor: wa.border, color: wa.text }} /></div>
+                      <div><label className="text-[10px] font-medium mb-0.5 block" style={{ color: wa.textFaint }}>Email</label>
+                        <input value={citaData.email} onChange={e => setCitaData(d => ({ ...d, email: e.target.value }))} placeholder="correo@email.com" type="email"
+                          className="w-full text-xs border rounded-lg px-3 py-1.5 outline-none" style={{ backgroundColor: wa.inputFieldBg, borderColor: wa.border, color: wa.text }} /></div>
+                    </div>)}
+
+                    {/* Step 5 — Resumen */}
+                    {citaStep === 5 && (<div className="space-y-2">
+                      <p className="text-[11px] font-semibold" style={{ color: wa.text }}>Confirmar cita</p>
+                      <div className="rounded-lg p-2.5 text-[10px] space-y-1.5" style={{ backgroundColor: wa.panelItemBg, border: `1px solid ${wa.border}` }}>
+                        {[{ l: "Servicio", v: citaData.servicio }, { l: "Estilista", v: citaData.estilista || "Sin preferencia" },
+                          { l: "Fecha", v: citaData.fecha ? new Date(citaData.fecha + "T12:00:00").toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" }) : "" },
+                          { l: "Hora", v: CITA_HOUR_LABELS[citaData.hora] ?? "" }, { l: "Cliente", v: citaData.nombre }, { l: "WhatsApp", v: citaData.telefono }
+                        ].map(r => (<div key={r.l} className="flex justify-between"><span style={{ color: wa.textFaint }}>{r.l}</span><span className="font-semibold text-right" style={{ color: wa.text }}>{r.v}</span></div>))}
                       </div>
+                      <div className="rounded-lg p-2.5 text-[10px]" style={{ backgroundColor: wa.mode === "dark" ? "#1a2e1a" : "#F0FDF4", border: "1px solid #16A34A40" }}>
+                        <div className="flex justify-between"><span style={{ color: wa.textMuted }}>Valor servicio</span><span style={{ color: wa.text }}>{fmtCOP(citaData.precio)}</span></div>
+                        <div className="flex justify-between font-bold mt-1 pt-1" style={{ borderTop: "1px solid #16A34A30", color: "#16A34A" }}><span>Seña a pagar</span><span>$30.000</span></div>
+                      </div>
+                      <button onClick={handleCreateCita} disabled={citaSaving} className="w-full py-2 rounded-xl text-white text-xs font-semibold disabled:opacity-40" style={{ backgroundColor: "#3B82F6" }}>
+                        {citaSaving ? "Agendando…" : "Confirmar cita"}
+                      </button>
+                    </div>)}
+
+                    {/* Nav */}
+                    <div className="flex gap-2 pt-1">
+                      {citaStep > 1 && <button onClick={() => setCitaStep(s => s - 1)} className="flex-1 py-1.5 rounded-lg text-[10px] font-medium" style={{ border: `1px solid ${wa.border}`, color: wa.textMuted }}>Atrás</button>}
+                      {citaStep === 4 && citaData.nombre && citaData.telefono && <button onClick={() => setCitaStep(5)} className="flex-1 py-1.5 rounded-lg text-[10px] font-semibold text-white" style={{ backgroundColor: "#3B82F6" }}>Siguiente</button>}
                     </div>
-                    {/* Info de cliente */}
-                    <div className="rounded-lg p-2 text-[10px]" style={{ backgroundColor: wa.panelItemBg }}>
-                      <p style={{ color: wa.textFaint }}>Cliente:</p>
-                      <p className="font-semibold" style={{ color: wa.text }}>{conv?.customerName ?? "—"}</p>
-                      <p style={{ color: wa.textFaint }}>{conv?.customerId ?? ""}</p>
-                    </div>
-                    <button onClick={handleCreateCita} disabled={citaSaving || !citaForm.servicio || !citaForm.fecha}
-                      className="w-full py-2 rounded-xl text-white text-xs font-semibold disabled:opacity-40"
-                      style={{ backgroundColor: "#3B82F6" }}>
-                      {citaSaving ? "Agendando…" : "Agendar cita"}
-                    </button>
                   </>
                 )}
               </div>
@@ -1231,13 +1251,13 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
                         </p>
                         {/* Slots */}
                         <div className="space-y-1">
-                          {CITA_HOURS.map(h => {
-                            const slotAppts = dayAppts.filter(a => a.time_slot === h);
+                          {CITA_SLOTS.map(h => {
+                            const slotAppts = dayAppts.filter(a => a.time_slot === h.value);
                             const free = slotAppts.length === 0;
                             return (
-                              <div key={h} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[10px]"
+                              <div key={h.value} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[10px]"
                                 style={{ backgroundColor: free ? (wa.mode === "dark" ? "#0f2a1f" : "#F0FDF4") : wa.panelItemBg }}>
-                                <span className="font-mono font-semibold w-12" style={{ color: wa.textMuted }}>{CITA_HOUR_LABELS[h]}</span>
+                                <span className="font-mono font-semibold w-12" style={{ color: wa.textMuted }}>{h.label}</span>
                                 {free ? (
                                   <span style={{ color: "#16A34A" }} className="font-medium">Disponible</span>
                                 ) : (
