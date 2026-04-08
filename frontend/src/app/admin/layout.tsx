@@ -49,6 +49,7 @@ function AdminSidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: (
     { href: "/admin/equipo", label: "Equipo" },
     { href: "/admin/estilistas", label: "HC Equipo" },
     { href: "/admin/usuarios", label: "Usuarios" },
+    { href: "/admin/promos", label: "Promos" },
     { href: "/admin/reportes", label: "Reportes" },
     { href: "/admin/configuracion", label: "Config" },
     { href: "/admin/perfil", label: "Perfil" },
@@ -188,13 +189,14 @@ function LoginForm({ onLogin }: { onLogin: (user?: { name: string; avatar: strin
         </div>
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="text-xs text-[#6B6B6B] block mb-2 font-medium uppercase tracking-wider">Email</label>
+            <label className="text-xs text-[#6B6B6B] block mb-2 font-medium uppercase tracking-wider">Usuario</label>
             <input
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              type="email"
+              type="text"
+              autoComplete="username"
               className="w-full bg-white border border-[#EDE3E1] rounded-lg px-4 py-3 text-sm text-[#121212] placeholder-[#6B6B6B]/50 focus:outline-none focus:ring-2 focus:ring-[#8B3A4A] focus:border-transparent transition"
-              placeholder="admin@shelie.com"
+              placeholder="nombre.apellido"
             />
           </div>
           <div>

@@ -15,12 +15,14 @@ import contactRouter, { initContactTable } from "./routes/contact";
 import uploadsRouter     from "./routes/uploads";
 import employeesRouter   from "./routes/employees";
 import stylistRouter     from "./routes/stylist";
+import promosRouter      from "./routes/promos";
 import { ensureSchema } from "./lib/db";
 import { requireAuth } from "./middleware/auth";
 import { initProductsTable } from "./lib/db-products";
 import { initServicesTable } from "./lib/db-services";
 import { initEmployeesTables } from "./lib/employees-db";
 import { initStylistTables } from "./lib/stylist-db";
+import { initPromosTable } from "./lib/promos-db";
 
 dotenv.config();
 
@@ -64,6 +66,7 @@ app.use("/api/quotes",              quotesRouter);
 app.use("/api/contact",             contactRouter);
 app.use("/api/uploads",             uploadsRouter);
 app.use("/api/appointments",        appointmentsRouter);
+app.use("/api/promos",              promosRouter);
 
 // Admin: /auth es pública, el resto requiere JWT
 app.use("/api/admin", (req, res, next) => {
@@ -97,6 +100,7 @@ async function start() {
     await initAppointmentsPaymentCols();
     await initEmployeesTables();
     await initStylistTables();
+    await initPromosTable();
   } catch (err) {
     console.warn("[init tables]", err);
   }
