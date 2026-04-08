@@ -518,7 +518,8 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
   const [input, setInput]         = useState("");
   const [showTpl, setShowTpl]     = useState(false);
   const [showPanel, setShowPanel] = useState(false);
-  const [panelTab, setPanelTab]   = useState<"rastrear" | "crear">("rastrear");
+  const [panelTab, setPanelTab]   = useState<"rastrear" | "crear" | "encuesta">("rastrear");
+  const [surveySent, setSurveySent] = useState(false);
   const messagesEnd = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -586,7 +587,7 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
       setOrderForm(f => ({ ...f, client_name: conv.customerName ?? "", client_phone: conv.customerId ?? "" }));
       setTrackQ(conv.customerId ?? "");
       setTrackResult(null); setTrackError("");
-      setOrderDone(null); setOrderErr(""); setOrderItems([]);
+      setOrderDone(null); setOrderErr(""); setOrderItems([]); setSurveySent(false);
     }
   }, [conv?.id]);
 
@@ -715,6 +716,18 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
                 color: showPanel && panelTab === "crear" ? "#059669" : wa.textMuted,
               }}>
               ➕
+            </button>
+            <button
+              onClick={() => { setShowPanel(!showPanel); setPanelTab("encuesta"); setSurveySent(false); }}
+              title="Encuesta de satisfacción"
+              className="w-9 h-9 rounded-full flex items-center justify-center transition-colors"
+              style={{
+                backgroundColor: showPanel && panelTab === "encuesta" ? "#8B5CF630" : "transparent",
+                color: showPanel && panelTab === "encuesta" ? "#8B5CF6" : wa.textMuted,
+              }}>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+              </svg>
             </button>
             <a href={`https://wa.me/${conv.customerId}`} target="_blank" rel="noopener noreferrer"
               title="Abrir en WhatsApp"
@@ -902,7 +915,15 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
                 color: panelTab === "crear" ? "#059669" : wa.textFaint,
                 borderBottom: panelTab === "crear" ? "2px solid #059669" : "2px solid transparent",
               }}>
-              ➕ Crear
+              Crear
+            </button>
+            <button onClick={() => { setPanelTab("encuesta"); setSurveySent(false); }}
+              className="flex-1 py-2.5 text-xs font-semibold transition-colors"
+              style={{
+                color: panelTab === "encuesta" ? "#8B5CF6" : wa.textFaint,
+                borderBottom: panelTab === "encuesta" ? "2px solid #8B5CF6" : "2px solid transparent",
+              }}>
+              Encuesta
             </button>
             <button onClick={() => setShowPanel(false)}
               className="px-3 text-sm opacity-40 hover:opacity-70"
@@ -966,6 +987,61 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
             )}
 
             {/* ── Crear pedido ── */}
+            {/* ── Encuesta de satisfacción ── */}
+            {panelTab === "encuesta" && (
+              <div className="space-y-3">
+                <p className="text-xs font-semibold" style={{ color: wa.textMuted }}>Encuesta de satisfacción</p>
+
+                {surveySent ? (
+                  <div className="rounded-xl p-3 text-xs space-y-1.5"
+                    style={{ backgroundColor: wa.mode === "dark" ? "#8B5CF620" : "#F5F3FF", border: "1px solid #8B5CF6aa" }}>
+                    <p className="font-bold" style={{ color: "#8B5CF6" }}>Encuesta enviada</p>
+                    <p style={{ color: wa.textMuted }}>El cliente recibirá el mensaje con el enlace de la encuesta.</p>
+                    <button onClick={() => setSurveySent(false)}
+                      className="w-full py-1 text-xs hover:underline" style={{ color: "#8B5CF6" }}>
+                      Enviar otra
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-[10px] leading-relaxed" style={{ color: wa.textFaint }}>
+                      Envía una encuesta rápida al cliente para evaluar la atención recibida. El mensaje se envía por WhatsApp.
+                    </p>
+
+                    {/* Preview del mensaje */}
+                    <div className="rounded-xl p-3 text-xs space-y-2"
+                      style={{ backgroundColor: wa.panelItemBg, border: `1px solid ${wa.border}` }}>
+                      <p className="font-semibold text-[11px]" style={{ color: wa.text }}>Vista previa del mensaje:</p>
+                      <div className="rounded-lg p-2.5 text-[11px] leading-relaxed"
+                        style={{ backgroundColor: wa.mode === "dark" ? "#005C4B" : "#D9FDD3", color: wa.text }}>
+                        <p style={{ margin: 0 }}>Hola {conv?.customerName?.split(" ")[0] ?? ""},</p>
+                        <p style={{ margin: "6px 0 0" }}>Queremos saber cómo fue tu experiencia con nosotros. Tu opinión nos ayuda a mejorar.</p>
+                        <p style={{ margin: "8px 0 2px", fontWeight: 600 }}>Califica tu atención:</p>
+                        <p style={{ margin: 0 }}>1 - Muy mala</p>
+                        <p style={{ margin: 0 }}>2 - Mala</p>
+                        <p style={{ margin: 0 }}>3 - Regular</p>
+                        <p style={{ margin: 0 }}>4 - Buena</p>
+                        <p style={{ margin: 0 }}>5 - Excelente</p>
+                        <p style={{ margin: "8px 0 0" }}>Responde con el número del 1 al 5. Gracias por confiar en Shelie&apos;s Hair Studio.</p>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={async () => {
+                        const surveyMsg = `Hola ${conv?.customerName?.split(" ")[0] ?? ""},\n\nQueremos saber cómo fue tu experiencia con nosotros. Tu opinión nos ayuda a mejorar.\n\n*Califica tu atención:*\n1 - Muy mala\n2 - Mala\n3 - Regular\n4 - Buena\n5 - Excelente\n\nResponde con el número del 1 al 5. Gracias por confiar en *Shelie's Hair Studio*.`;
+                        await onSend(surveyMsg);
+                        setSurveySent(true);
+                      }}
+                      disabled={sending}
+                      className="w-full py-2 rounded-xl text-white text-xs font-semibold disabled:opacity-40"
+                      style={{ backgroundColor: "#8B5CF6" }}>
+                      {sending ? "Enviando…" : "Enviar encuesta al cliente"}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
             {panelTab === "crear" && (
               <div className="space-y-2.5">
                 <p className="text-xs font-semibold" style={{ color: wa.textMuted }}>Nuevo pedido manual</p>
