@@ -1052,7 +1052,7 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
                     <p className="font-bold" style={{ color: "#059669" }}>✅ Pedido creado</p>
                     <p style={{ color: wa.textMuted }}>N°: <span className="font-mono font-bold" style={{ color: wa.text }}>{orderDone.order_number}</span></p>
                     <button
-                      onClick={() => onSend(`✅ Tu pedido fue registrado.\nN° de orden: ${orderDone.order_number}\nPuedes rastrearlo en: ${typeof window !== "undefined" ? window.location.origin : ""}/mi-pedido`)}
+                      onClick={() => onSend(`✅ Tu pedido fue registrado.\nN° de orden: ${orderDone.order_number}\nTe invitamos a visitar nuestra página web: https://shelies.asf.company`)}
                       className="w-full py-1.5 rounded-lg text-white text-xs font-medium"
                       style={{ backgroundColor: wa.green }}>
                       Enviar confirmación al cliente
