@@ -262,7 +262,7 @@ export default function CitasPage() {
     setLoading(true);
     stylistFetch(apiUrl(`/api/stylist/appointments/all?employeeId=${user.id}`))
       .then(r => r.json())
-      .then(d => { if (!cancelled) setAppts(d.data ?? d ?? []); })
+      .then(d => { if (!cancelled) { const raw = d.data ?? d ?? []; setAppts(raw.map((a: Record<string, unknown>) => ({ ...a, time: a.time ?? a.time_slot ?? "", date: a.date ? String(a.date).slice(0, 10) : "" }))); } })
       .catch(() => {})
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
@@ -391,7 +391,7 @@ export default function CitasPage() {
           ) : (() => {
             const weekAppts = appts
               .filter(a => a.date >= toDateStr(weekDays[0]) && a.date <= toDateStr(weekDays[6]))
-              .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+              .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? "") || (a.time ?? "").localeCompare(b.time ?? ""));
             const byDay: Record<string, Appointment[]> = {};
             weekAppts.forEach(a => { byDay[a.date] = [...(byDay[a.date] ?? []), a]; });
             return Object.entries(byDay).map(([date, dayAppts]) => {

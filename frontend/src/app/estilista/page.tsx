@@ -117,12 +117,15 @@ export default function EstilistaDashboard() {
     if (!user?.id) return;
     stylistFetch(apiUrl(`/api/stylist/appointments/all?employeeId=${user.id}`))
       .then(r => r.json())
-      .then(d => setAppts(d.data ?? d ?? []))
+      .then(d => {
+        const raw = d.data ?? d ?? [];
+        setAppts(raw.map((a: Record<string, unknown>) => ({ ...a, time: a.time ?? a.time_slot ?? "", date: a.date ? String(a.date).slice(0, 10) : "" })));
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [user?.id]);
 
-  const todayAppts = appts.filter(a => a.date === TODAY).sort((a, b) => a.time.localeCompare(b.time));
+  const todayAppts = appts.filter(a => a.date === TODAY).sort((a, b) => (a.time ?? "").localeCompare(b.time ?? ""));
   const todayTotal = todayAppts.length;
   const todayPending = todayAppts.filter(a => {
     const s = a.workflow_status ?? a.status;
@@ -145,7 +148,7 @@ export default function EstilistaDashboard() {
 
   const upcomingAppts = appts
     .filter(a => a.date > TODAY && a.status !== "cancelled" && a.workflow_status !== "cancelado")
-    .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))
+    .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? "") || (a.time ?? "").localeCompare(b.time ?? ""))
     .slice(0, 5);
 
   const kpis = [

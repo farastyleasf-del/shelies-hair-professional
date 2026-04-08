@@ -74,7 +74,7 @@ export default function MetricasPage() {
       .finally(() => setLoading(false));
   }, [user?.id, period]);
 
-  const rows = (data?.by_day ?? []).slice().sort((a, b) => b.date.localeCompare(a.date));
+  const rows = (data?.by_day ?? []).slice().sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
   const maxCompleted = Math.max(...rows.map(r => r.completed), 1);
 
   const completionRate = data && data.total_appointments > 0
