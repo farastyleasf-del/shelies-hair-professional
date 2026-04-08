@@ -561,6 +561,31 @@ export default function EquipoPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [usersLoaded, setUsersLoaded] = useState(false);
+  const [showUserForm, setShowUserForm] = useState(false);
+  const [userForm, setUserForm] = useState({ name: "", email: "", password: "", role: "agente" });
+  const [userSaving, setUserSaving] = useState(false);
+  const [userErr, setUserErr] = useState("");
+
+  async function handleCreateUser() {
+    if (!userForm.name || !userForm.email || !userForm.password) { setUserErr("Nombre, email y contraseña son requeridos"); return; }
+    setUserSaving(true); setUserErr("");
+    try {
+      const res = await authedFetch(apiUrl("/api/admin/users"), {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...userForm, avatar: "" }),
+      });
+      if (res.ok) {
+        const newUser = await res.json();
+        setUsers(prev => [...prev, newUser]);
+        setShowUserForm(false);
+        setUserForm({ name: "", email: "", password: "", role: "agente" });
+      } else {
+        const e = await res.json() as { error?: string };
+        setUserErr(e.error ?? "Error al crear usuario");
+      }
+    } catch { setUserErr("Error de conexión"); }
+    finally { setUserSaving(false); }
+  }
 
   // ── Load stylists ──────────────────────────────────────────────────────────
   function loadStylists() {
@@ -730,28 +755,67 @@ export default function EquipoPage() {
 
       {/* ── USUARIOS ADMIN TAB ──────────────────────────────────────────────── */}
       {tab === "users" && (
-        <div>
-          {loadingUsers ? (
-            <div
-              className="text-center py-12"
-              style={{ color: t.colors.textFaint }}
-            >
-              Cargando...
+        <div className="space-y-4">
+          {/* Toolbar */}
+          <div className="flex items-center justify-between">
+            <p className="text-sm" style={{ color: t.colors.textMuted }}>{users.length} usuario{users.length !== 1 ? "s" : ""}</p>
+            <button onClick={() => { setShowUserForm(!showUserForm); setUserErr(""); }}
+              className="text-xs font-semibold px-4 py-2 rounded-xl text-white"
+              style={{ backgroundColor: t.colors.primary }}>
+              {showUserForm ? "Cancelar" : "+ Crear usuario"}
+            </button>
+          </div>
+
+          {/* Create form */}
+          {showUserForm && (
+            <div className="border rounded-2xl p-5 space-y-3" style={{ backgroundColor: t.colors.bgCard, borderColor: t.colors.border }}>
+              <p className="text-sm font-semibold" style={{ color: t.colors.text }}>Nuevo usuario admin</p>
+              {userErr && <p className="text-xs text-red-500 rounded-lg px-3 py-2" style={{ backgroundColor: "#FEF2F2" }}>{userErr}</p>}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-medium block mb-1" style={{ color: t.colors.textMuted }}>Nombre *</label>
+                  <input value={userForm.name} onChange={e => setUserForm(f => ({ ...f, name: e.target.value }))}
+                    placeholder="Nombre completo" className="w-full text-sm border rounded-xl px-3 py-2 outline-none"
+                    style={{ backgroundColor: t.colors.inputBg, borderColor: t.colors.inputBorder, color: t.colors.text }} />
+                </div>
+                <div>
+                  <label className="text-[10px] font-medium block mb-1" style={{ color: t.colors.textMuted }}>Email / Usuario *</label>
+                  <input value={userForm.email} onChange={e => setUserForm(f => ({ ...f, email: e.target.value }))}
+                    placeholder="usuario@email.com" className="w-full text-sm border rounded-xl px-3 py-2 outline-none"
+                    style={{ backgroundColor: t.colors.inputBg, borderColor: t.colors.inputBorder, color: t.colors.text }} />
+                </div>
+                <div>
+                  <label className="text-[10px] font-medium block mb-1" style={{ color: t.colors.textMuted }}>Contraseña *</label>
+                  <input value={userForm.password} onChange={e => setUserForm(f => ({ ...f, password: e.target.value }))}
+                    type="password" placeholder="Min. 6 caracteres" className="w-full text-sm border rounded-xl px-3 py-2 outline-none"
+                    style={{ backgroundColor: t.colors.inputBg, borderColor: t.colors.inputBorder, color: t.colors.text }} />
+                </div>
+                <div>
+                  <label className="text-[10px] font-medium block mb-1" style={{ color: t.colors.textMuted }}>Rol</label>
+                  <select value={userForm.role} onChange={e => setUserForm(f => ({ ...f, role: e.target.value }))}
+                    className="w-full text-sm border rounded-xl px-3 py-2 outline-none"
+                    style={{ backgroundColor: t.colors.inputBg, borderColor: t.colors.inputBorder, color: t.colors.text }}>
+                    <option value="admin">Admin</option>
+                    <option value="supervisor">Supervisor</option>
+                    <option value="agente">Agente</option>
+                    <option value="soporte">Soporte</option>
+                  </select>
+                </div>
+              </div>
+              <button onClick={handleCreateUser} disabled={userSaving || !userForm.name || !userForm.email || !userForm.password}
+                className="px-6 py-2 rounded-xl text-white text-sm font-semibold disabled:opacity-50"
+                style={{ backgroundColor: t.colors.primary }}>
+                {userSaving ? "Creando..." : "Crear usuario"}
+              </button>
             </div>
-          ) : users.length === 0 ? (
-            <div
-              className="border rounded-2xl p-12 text-center"
-              style={{
-                backgroundColor: t.colors.bgCard,
-                borderColor: t.colors.border,
-                color: t.colors.textFaint,
-              }}
-            >
-              <p className="text-4xl mb-3">👥</p>
+          )}
+
+          {loadingUsers ? (
+            <div className="text-center py-12" style={{ color: t.colors.textFaint }}>Cargando...</div>
+          ) : users.length === 0 && !showUserForm ? (
+            <div className="border rounded-2xl p-12 text-center" style={{ backgroundColor: t.colors.bgCard, borderColor: t.colors.border, color: t.colors.textFaint }}>
               <p className="text-sm">Sin usuarios registrados</p>
-              <p className="text-xs mt-1" style={{ color: t.colors.textFaint }}>
-                Agrega usuarios desde <strong>Usuarios</strong>
-              </p>
+              <p className="text-xs mt-1">Crea el primer usuario con el botón de arriba</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
