@@ -565,6 +565,9 @@ export default function EquipoPage() {
   const [userForm, setUserForm] = useState({ name: "", email: "", password: "", role: "agente" });
   const [userSaving, setUserSaving] = useState(false);
   const [userErr, setUserErr] = useState("");
+  const [changingPwId, setChangingPwId] = useState<number | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [pwSaving, setPwSaving] = useState(false);
 
   async function handleCreateUser() {
     if (!userForm.name || !userForm.email || !userForm.password) { setUserErr("Nombre, email y contraseña son requeridos"); return; }
@@ -585,6 +588,28 @@ export default function EquipoPage() {
       }
     } catch { setUserErr("Error de conexión"); }
     finally { setUserSaving(false); }
+  }
+
+  async function handleDeleteUser(id: number, name: string) {
+    if (!confirm(`¿Eliminar al usuario ${name}?`)) return;
+    try {
+      await authedFetch(apiUrl(`/api/admin/users?id=${id}`), { method: "DELETE" });
+      setUsers(prev => prev.filter(u => u.id !== id));
+    } catch { alert("Error al eliminar"); }
+  }
+
+  async function handleChangePassword(id: number) {
+    if (!newPassword || newPassword.length < 6) { alert("La contraseña debe tener al menos 6 caracteres"); return; }
+    setPwSaving(true);
+    try {
+      const res = await authedFetch(apiUrl(`/api/admin/users?id=${id}`), {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: newPassword }),
+      });
+      if (res.ok) { setChangingPwId(null); setNewPassword(""); alert("Contraseña actualizada"); }
+      else alert("Error al cambiar contraseña");
+    } catch { alert("Error de conexión"); }
+    finally { setPwSaving(false); }
   }
 
   // ── Load stylists ──────────────────────────────────────────────────────────
@@ -820,46 +845,46 @@ export default function EquipoPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {users.map((user) => (
-                <div
-                  key={user.id}
-                  className="border rounded-2xl p-5"
-                  style={{
-                    backgroundColor: t.colors.bgCard,
-                    borderColor: t.colors.border,
-                  }}
-                >
+                <div key={user.id} className="border rounded-2xl p-5" style={{ backgroundColor: t.colors.bgCard, borderColor: t.colors.border }}>
                   <div className="flex items-center gap-3 mb-3">
-                    <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white text-sm"
-                      style={{ backgroundColor: t.colors.primary }}
-                    >
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white text-sm" style={{ backgroundColor: t.colors.primary }}>
                       {user.name.charAt(0).toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p
-                        className="font-semibold text-sm truncate"
-                        style={{ color: t.colors.text }}
-                      >
-                        {user.name}
-                      </p>
-                      <p
-                        className="text-xs truncate"
-                        style={{ color: t.colors.textMuted }}
-                      >
-                        {user.email}
-                      </p>
+                      <p className="font-semibold text-sm truncate" style={{ color: t.colors.text }}>{user.name}</p>
+                      <p className="text-xs truncate" style={{ color: t.colors.textMuted }}>{user.email}</p>
                     </div>
-                    <div
-                      className={`w-2 h-2 rounded-full ${
-                        user.active ? "bg-green-400" : "bg-gray-400"
-                      }`}
-                    />
+                    <div className={`w-2 h-2 rounded-full ${user.active ? "bg-green-400" : "bg-gray-400"}`} />
                   </div>
-                  <span
-                    className="text-[10px] px-2 py-0.5 rounded font-medium bg-vino/20 text-vino"
-                  >
-                    {roleLabels[user.role] ?? user.role}
-                  </span>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[10px] px-2 py-0.5 rounded font-medium" style={{ backgroundColor: t.colors.primaryLight, color: t.colors.primary }}>{roleLabels[user.role] ?? user.role}</span>
+                  </div>
+                  {/* Cambiar contraseña */}
+                  {changingPwId === user.id ? (
+                    <div className="flex gap-1.5 mb-2">
+                      <input value={newPassword} onChange={e => setNewPassword(e.target.value)} type="password" placeholder="Nueva contraseña"
+                        className="flex-1 text-xs border rounded-lg px-2 py-1.5 outline-none" style={{ backgroundColor: t.colors.inputBg, borderColor: t.colors.inputBorder, color: t.colors.text }} />
+                      <button onClick={() => handleChangePassword(user.id)} disabled={pwSaving}
+                        className="text-[10px] px-2 py-1.5 rounded-lg text-white font-semibold disabled:opacity-50" style={{ backgroundColor: "#16A34A" }}>
+                        {pwSaving ? "..." : "OK"}
+                      </button>
+                      <button onClick={() => { setChangingPwId(null); setNewPassword(""); }}
+                        className="text-[10px] px-2 py-1.5 rounded-lg font-medium" style={{ border: `1px solid ${t.colors.border}`, color: t.colors.textMuted }}>
+                        X
+                      </button>
+                    </div>
+                  ) : null}
+                  {/* Actions */}
+                  <div className="flex gap-2">
+                    <button onClick={() => { setChangingPwId(user.id); setNewPassword(""); }}
+                      className="flex-1 text-[10px] py-1.5 rounded-lg font-medium" style={{ border: `1px solid ${t.colors.border}`, color: t.colors.textMuted }}>
+                      Cambiar contraseña
+                    </button>
+                    <button onClick={() => handleDeleteUser(user.id, user.name)}
+                      className="text-[10px] py-1.5 px-3 rounded-lg font-medium" style={{ border: "1px solid #FCA5A5", color: "#DC2626", backgroundColor: "#FEF2F2" }}>
+                      Eliminar
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
