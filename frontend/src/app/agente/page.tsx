@@ -729,8 +729,12 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
         </div>
 
         {/* Área de mensajes */}
-        <div className="flex-1 overflow-y-auto px-4 py-3"
+        <div className="flex-1 overflow-y-auto px-4 py-3 relative"
           style={{ backgroundColor: wa.chatBg }}>
+          {/* Watermark logo */}
+          <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", opacity: wa.mode === "dark" ? 0.04 : 0.06, pointerEvents: "none", zIndex: 0 }}>
+            <Image src="/images/shelies-logo-real.jpg" alt="" width={280} height={280} style={{ borderRadius: "50%" }} />
+          </div>
           {messages.length === 0 && (
             <div className="flex justify-center mt-4">
               <span className="text-[11px] px-3 py-1.5 rounded-lg"
