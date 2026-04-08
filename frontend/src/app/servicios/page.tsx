@@ -80,14 +80,9 @@ const SERVICIOS_MENU = [
 ];
 
 const TIME_SLOTS = [
-  { label: "9:00 AM",  value: "09:00" },
-  { label: "10:00 AM", value: "10:00" },
-  { label: "11:00 AM", value: "11:00" },
+  { label: "8:00 AM",  value: "08:00" },
   { label: "12:00 PM", value: "12:00" },
-  { label: "2:00 PM",  value: "14:00" },
-  { label: "3:00 PM",  value: "15:00" },
   { label: "4:00 PM",  value: "16:00" },
-  { label: "5:00 PM",  value: "17:00" },
 ];
 
 const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
@@ -250,7 +245,7 @@ function MiniCalendar({ selected, onSelect }: { selected: string | null; onSelec
   function disabled(day: number) {
     const d = new Date(y, m, day);
     const dow = d.getDay();
-    return d < today || dow === 0 || dow === 1; // closed Sun + Mon
+    return d < today; // abierto lunes a domingo
   }
 
   return (
@@ -288,7 +283,7 @@ function MiniCalendar({ selected, onSelect }: { selected: string | null; onSelec
         })}
       </div>
 
-      <p className="text-[10px] text-humo mt-3 text-center">Lunes y domingos: cerrado</p>
+      <p className="text-[10px] text-humo mt-3 text-center">Atención: Lunes a Domingo</p>
     </div>
   );
 }

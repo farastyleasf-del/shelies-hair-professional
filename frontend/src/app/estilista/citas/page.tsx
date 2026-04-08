@@ -24,7 +24,7 @@ const P = {
   shadow:      "0 4px 20px rgba(94,36,48,0.07)",
 };
 
-const HOURS = ["08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00"];
+const HOURS = ["08:00","12:00","16:00"];
 const DAY_NAMES = ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
 
 function addDays(base: Date, n: number) {

@@ -15,10 +15,9 @@ type Cita = {
   creadoEn: string;
 };
 
-const HORAS = ["09:00","10:00","11:00","12:00","14:00","15:00","16:00","17:00"];
+const HORAS = ["08:00","12:00","16:00"];
 const HORA_LABELS: Record<string,string> = {
-  "09:00":"9AM","10:00":"10AM","11:00":"11AM","12:00":"12PM",
-  "14:00":"2PM","15:00":"3PM","16:00":"4PM","17:00":"5PM"
+  "08:00":"8AM","12:00":"12PM","16:00":"4PM"
 };
 const DIAS_SEMANA = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
 const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];

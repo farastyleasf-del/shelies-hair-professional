@@ -351,7 +351,7 @@ function EstilistaShell({ children, user, onLogout }: { children: ReactNode; use
     } catch {} finally { setShiftLoading(false); setConfirmAction(null); }
   }
 
-  const firstName = user.name.split(" ")[0];
+  const firstName = (user.name ?? "Estilista").split(" ")[0];
 
   const navContent = (
     <nav style={{ padding: "24px 12px", display: "flex", flexDirection: "column", height: "100%" }}>
