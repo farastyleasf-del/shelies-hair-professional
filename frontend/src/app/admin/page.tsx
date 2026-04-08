@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { useAdminTheme } from "@/lib/admin-theme";
 import { formatCOPAdmin, statusColors } from "@/lib/admin-data";
 import { apiUrl, authedFetch } from "@/lib/api";
@@ -59,6 +60,26 @@ export default function AdminDashboard() {
             <KPICard label="Pedidos nuevos" value={String(nuevos)} icon="🆕" />
             <KPICard label="Enviados" value={String(enviados)} icon="🚚" />
             <KPICard label="Ingresos totales" value={formatCOPAdmin(total)} icon="💰" />
+          </div>
+
+          {/* QR Web */}
+          <div className="border rounded-xl p-5 flex items-center gap-5" style={{ backgroundColor: t.colors.bgCard, borderColor: t.colors.border }}>
+            <div className="flex-shrink-0" style={{ background: "#fff", padding: 8, borderRadius: 12 }}>
+              <Image src="/images/qr/qr-web-shelies.png" alt="QR shelies.asf.company" width={120} height={120} />
+            </div>
+            <div>
+              <p className="text-sm font-semibold" style={{ color: t.colors.text }}>QR de la página web</p>
+              <p className="text-xs mt-1" style={{ color: t.colors.textMuted }}>Escanea para abrir shelies.asf.company</p>
+              <p className="text-xs font-mono mt-2 px-2 py-1 rounded" style={{ backgroundColor: t.colors.bg, color: t.colors.textMuted }}>https://shelies.asf.company</p>
+              <button onClick={() => {
+                const a = document.createElement("a");
+                a.href = "/images/qr/qr-web-shelies.png";
+                a.download = "qr-shelies-web.png";
+                a.click();
+              }} className="text-xs font-semibold mt-2 px-3 py-1.5 rounded-lg" style={{ backgroundColor: t.colors.primaryLight, color: t.colors.primary }}>
+                Descargar QR
+              </button>
+            </div>
           </div>
 
           <div className="border rounded-xl overflow-hidden" style={{ borderColor: t.colors.border }}>
