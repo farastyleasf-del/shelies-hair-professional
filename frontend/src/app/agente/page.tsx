@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { timeAgo, templates } from "@/lib/admin-data";
 import type { Conversation, Message } from "@/lib/admin-types";
 import { useAdminTheme } from "@/lib/admin-theme";
+import Image from "next/image";
 
 function fmtCOP(n: number) {
   return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(n);
@@ -645,9 +646,10 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-4"
         style={{ backgroundColor: wa.chatBg }}>
-        <div className="w-20 h-20 rounded-full flex items-center justify-center text-4xl"
-          style={{ backgroundColor: wa.mode === "dark" ? "#202C33" : "#DFE5E7" }}>
-          💬
+        <div className="w-20 h-20 rounded-full overflow-hidden"
+          style={{ boxShadow: "0 4px 16px rgba(0,0,0,0.15)" }}>
+          <Image src="/images/shelies-logo-real.jpg" alt="Shelie's" width={80} height={80}
+            style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         </div>
         <div className="text-center space-y-1">
           <p className="text-base font-semibold" style={{ color: wa.text }}>Shelie&apos;s Chat</p>
