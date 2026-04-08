@@ -529,7 +529,7 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
   const [stylists, setStylists] = useState<StylistOpt[]>([]);
   const [allAppts, setAllAppts] = useState<AppointmentRow[]>([]);
   const [citaStep, setCitaStep] = useState(1);
-  const [citaData, setCitaData] = useState({ servicio: "", precio: 0, estilista: "", fecha: "", hora: "", nombre: "", telefono: "", email: "" });
+  const [citaData, setCitaData] = useState({ servicio: "", precio: 0, estilista: "", fecha: "", hora: "", nombre: "", telefono: "", email: "", notas: "" });
   const [citaSaving, setCitaSaving] = useState(false);
   const [citaDone, setCitaDone] = useState<string | null>(null);
   const [citaErr, setCitaErr] = useState("");
@@ -582,7 +582,7 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
           service_id: null, stylist_id: null,
           client_name: citaData.nombre, client_phone: citaData.telefono, client_email: citaData.email,
           date: citaData.fecha, time_slot: citaData.hora,
-          status: "pendiente", notes: `Servicio: ${citaData.servicio} | Estilista: ${citaData.estilista || "Sin preferencia"} | Agendada por agente`,
+          status: "pendiente", notes: `Servicio: ${citaData.servicio} | Estilista: ${citaData.estilista || "Sin preferencia"} | Agendada por agente${citaData.notas ? ` | Notas: ${citaData.notas}` : ""}`,
           service_name: citaData.servicio, stylist_name: citaData.estilista || "",
         }),
       });
@@ -600,7 +600,7 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
   }
   function resetCita() {
     setCitaStep(1);
-    setCitaData({ servicio: "", precio: 0, estilista: "", fecha: "", hora: "", nombre: conv?.customerName ?? "", telefono: conv?.customerId ?? "", email: "" });
+    setCitaData({ servicio: "", precio: 0, estilista: "", fecha: "", hora: "", nombre: conv?.customerName ?? "", telefono: conv?.customerId ?? "", email: "", notas: "" });
     setCitaDone(null); setCitaErr("");
   }
   const messagesEnd = useRef<HTMLDivElement>(null);
@@ -1194,6 +1194,9 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
                       <div><label className="text-[10px] font-medium mb-0.5 block" style={{ color: wa.textFaint }}>Email</label>
                         <input value={citaData.email} onChange={e => setCitaData(d => ({ ...d, email: e.target.value }))} placeholder="correo@email.com" type="email"
                           className="w-full text-xs border rounded-lg px-3 py-1.5 outline-none" style={{ backgroundColor: wa.inputFieldBg, borderColor: wa.border, color: wa.text }} /></div>
+                      <div><label className="text-[10px] font-medium mb-0.5 block" style={{ color: wa.textFaint }}>Notas / Observaciones</label>
+                        <textarea rows={2} value={citaData.notas} onChange={e => setCitaData(d => ({ ...d, notas: e.target.value }))} placeholder="Ej: cabello largo, primera vez, llega con acompañante..."
+                          className="w-full text-xs border rounded-lg px-3 py-1.5 outline-none resize-none" style={{ backgroundColor: wa.inputFieldBg, borderColor: wa.border, color: wa.text }} /></div>
                     </div>)}
 
                     {/* Step 5 — Resumen */}
@@ -1202,7 +1205,8 @@ function ChatPanel({ conv, messages, onSend, onSendImage, sending, agenteName }:
                       <div className="rounded-lg p-2.5 text-[10px] space-y-1.5" style={{ backgroundColor: wa.panelItemBg, border: `1px solid ${wa.border}` }}>
                         {[{ l: "Servicio", v: citaData.servicio }, { l: "Estilista", v: citaData.estilista || "Sin preferencia" },
                           { l: "Fecha", v: citaData.fecha ? new Date(citaData.fecha + "T12:00:00").toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" }) : "" },
-                          { l: "Hora", v: CITA_HOUR_LABELS[citaData.hora] ?? "" }, { l: "Cliente", v: citaData.nombre }, { l: "WhatsApp", v: citaData.telefono }
+                          { l: "Hora", v: CITA_HOUR_LABELS[citaData.hora] ?? "" }, { l: "Cliente", v: citaData.nombre }, { l: "WhatsApp", v: citaData.telefono },
+                          ...(citaData.notas ? [{ l: "Notas", v: citaData.notas }] : [])
                         ].map(r => (<div key={r.l} className="flex justify-between"><span style={{ color: wa.textFaint }}>{r.l}</span><span className="font-semibold text-right" style={{ color: wa.text }}>{r.v}</span></div>))}
                       </div>
                       <div className="rounded-lg p-2.5 text-[10px]" style={{ backgroundColor: wa.mode === "dark" ? "#1a2e1a" : "#F0FDF4", border: "1px solid #16A34A40" }}>
