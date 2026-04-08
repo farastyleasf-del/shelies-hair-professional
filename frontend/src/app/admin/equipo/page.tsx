@@ -798,16 +798,22 @@ export default function EquipoPage() {
               {userErr && <p className="text-xs text-red-500 rounded-lg px-3 py-2" style={{ backgroundColor: "#FEF2F2" }}>{userErr}</p>}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] font-medium block mb-1" style={{ color: t.colors.textMuted }}>Nombre *</label>
-                  <input value={userForm.name} onChange={e => setUserForm(f => ({ ...f, name: e.target.value }))}
-                    placeholder="Nombre completo" className="w-full text-sm border rounded-xl px-3 py-2 outline-none"
+                  <label className="text-[10px] font-medium block mb-1" style={{ color: t.colors.textMuted }}>Nombre completo *</label>
+                  <input value={userForm.name} onChange={e => {
+                    const name = e.target.value;
+                    const parts = name.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/\s+/);
+                    const username = parts.length >= 2 ? `${parts[0]}.${parts[parts.length - 1]}` : parts[0] ?? "";
+                    setUserForm(f => ({ ...f, name, email: username }));
+                  }}
+                    placeholder="Gabriela Arango" className="w-full text-sm border rounded-xl px-3 py-2 outline-none"
                     style={{ backgroundColor: t.colors.inputBg, borderColor: t.colors.inputBorder, color: t.colors.text }} />
                 </div>
                 <div>
-                  <label className="text-[10px] font-medium block mb-1" style={{ color: t.colors.textMuted }}>Email / Usuario *</label>
+                  <label className="text-[10px] font-medium block mb-1" style={{ color: t.colors.textMuted }}>Usuario (login) *</label>
                   <input value={userForm.email} onChange={e => setUserForm(f => ({ ...f, email: e.target.value }))}
-                    placeholder="usuario@email.com" className="w-full text-sm border rounded-xl px-3 py-2 outline-none"
+                    placeholder="gabriela.arango" className="w-full text-sm border rounded-xl px-3 py-2 outline-none font-mono"
                     style={{ backgroundColor: t.colors.inputBg, borderColor: t.colors.inputBorder, color: t.colors.text }} />
+                  <p className="text-[9px] mt-0.5" style={{ color: t.colors.textFaint }}>Se genera automático, puedes editarlo</p>
                 </div>
                 <div>
                   <label className="text-[10px] font-medium block mb-1" style={{ color: t.colors.textMuted }}>Contraseña *</label>
