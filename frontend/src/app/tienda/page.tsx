@@ -1,9 +1,10 @@
 "use client";
-import { Suspense, useState, useMemo } from "react";
+import { Suspense, useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import ProductCard from "@/components/ProductCard";
-import { products } from "@/lib/data";
-import { Objective, HairType } from "@/lib/types";
+import { products as fallbackProducts } from "@/lib/data";
+import { apiUrl } from "@/lib/api";
+import { Objective, HairType, Product } from "@/lib/types";
 
 const objectives: { value: Objective | ""; label: string }[] = [
   { value: "", label: "Todos los objetivos" },
@@ -40,9 +41,34 @@ function TiendaContent() {
   const searchParams = useSearchParams();
   const initialObj = (searchParams.get("objective") as Objective) || "";
 
+  const [products, setProducts] = useState<Product[]>(fallbackProducts);
   const [objective, setObjective] = useState<Objective | "">(initialObj);
   const [hairType, setHairType] = useState<HairType | "">("");
   const [priceRange, setPriceRange] = useState("");
+
+  // Cargar productos desde API
+  useEffect(() => {
+    fetch(apiUrl("/api/products"))
+      .then(r => r.json())
+      .then(data => {
+        const list = data.data ?? (Array.isArray(data) ? data : []);
+        if (list.length > 0) {
+          setProducts(list.filter((p: { is_active: boolean }) => p.is_active !== false).map((p: { slug: string; id: number; name: string; tagline: string; price: string; compare_price: string | null; category: string; stock: number; images: string[]; badges: string[]; benefits: string[]; for_whom: string; how_to_use: string; ingredients: string; hair_type: string[]; objective: string[] }) => ({
+            id: p.slug || String(p.id), slug: p.slug || String(p.id), name: p.name,
+            tagline: p.tagline ?? "", price: Number(p.price),
+            comparePrice: p.compare_price ? Number(p.compare_price) : undefined,
+            images: p.images ?? [], badges: (p.badges ?? []) as Product["badges"],
+            benefits: p.benefits ?? [], forWhom: p.for_whom ?? "",
+            howToUse: p.how_to_use ? [p.how_to_use] : [], ingredients: p.ingredients ?? "",
+            faq: [], category: (p.category ?? "kit") as Product["category"],
+            objective: (p.objective ?? []) as Product["objective"],
+            hairType: (p.hair_type ?? ["todos"]) as Product["hairType"],
+            stock: p.stock ?? 0, crossSell: [],
+          })));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const filtered = useMemo(() => {
     let list = [...products];

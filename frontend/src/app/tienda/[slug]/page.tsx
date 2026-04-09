@@ -1,14 +1,14 @@
 import { Metadata } from "next";
 import Link from "next/link";
-import { products } from "@/lib/data";
+import { fetchProductBySlug, products } from "@/lib/data";
 import ProductDetail from "@/components/ProductDetail";
 
-const BASE = "https://shelies.com";
+const BASE = "https://shelies.asf.company";
 
 export async function generateMetadata(
   { params }: { params: { slug: string } }
 ): Promise<Metadata> {
-  const product = products.find((p) => p.slug === params.slug);
+  const product = await fetchProductBySlug(params.slug);
   if (!product) return { title: "Producto no encontrado — Shelie's" };
 
   return {
@@ -31,8 +31,15 @@ export async function generateMetadata(
   };
 }
 
-export default function ProductPage({ params }: { params: { slug: string } }) {
-  const product = products.find((p) => p.slug === params.slug);
+export async function generateStaticParams() {
+  return products.map((p) => ({ slug: p.slug }));
+}
+
+export const dynamicParams = true;
+export const revalidate = 60;
+
+export default async function ProductPage({ params }: { params: { slug: string } }) {
+  const product = await fetchProductBySlug(params.slug);
 
   if (!product) {
     return (

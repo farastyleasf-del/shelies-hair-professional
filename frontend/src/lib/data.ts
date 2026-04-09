@@ -1,4 +1,4 @@
-import { Product, Testimonial, FAQItem, Promo, Order } from "./types";
+import { Product, Badge, Category, Objective, HairType, Testimonial, FAQItem, Promo, Order } from "./types";
 
 /* ════════════════════════════════════════════
    PRODUCTOS — catálogo Shelie's Hair Professional
@@ -402,4 +402,64 @@ export function getProduct(id: string) {
 
 export function getProductBySlug(slug: string) {
   return products.find((p) => p.slug === slug);
+}
+
+/* ── Fetch productos desde API (server-side) ── */
+const API = process.env.NEXT_PUBLIC_API_URL || process.env.BACKEND_INTERNAL_URL || "http://shelie_spa_back:3001";
+
+interface DBProduct {
+  id: number; slug: string; name: string; tagline: string; price: string;
+  compare_price: string | null; category: string; stock: number;
+  images: string[]; badges: string[]; benefits: string[];
+  for_whom: string; how_to_use: string; ingredients: string;
+  hair_type: string[]; objective: string[]; is_active: boolean;
+}
+
+function dbToProduct(p: DBProduct): Product {
+  return {
+    id: p.slug || String(p.id),
+    slug: p.slug || String(p.id),
+    name: p.name,
+    tagline: p.tagline ?? "",
+    price: Number(p.price),
+    comparePrice: p.compare_price ? Number(p.compare_price) : undefined,
+    images: p.images ?? [],
+    badges: (p.badges ?? []) as Badge[],
+    benefits: p.benefits ?? [],
+    forWhom: p.for_whom ?? "",
+    howToUse: p.how_to_use ? (typeof p.how_to_use === "string" ? [p.how_to_use] : p.how_to_use) : [],
+    ingredients: p.ingredients ?? "",
+    faq: [],
+    category: (p.category ?? "kit") as Category,
+    objective: (p.objective ?? []) as Objective[],
+    hairType: (p.hair_type ?? ["todos"]) as HairType[],
+    stock: p.stock ?? 0,
+    crossSell: [],
+  };
+}
+
+export async function fetchProducts(): Promise<Product[]> {
+  try {
+    const res = await fetch(`${API}/api/products`, { next: { revalidate: 60 } });
+    if (!res.ok) return products;
+    const data = await res.json();
+    const list: DBProduct[] = data.data ?? (Array.isArray(data) ? data : []);
+    if (list.length === 0) return products;
+    return list.filter(p => p.is_active).map(dbToProduct);
+  } catch {
+    return products; // fallback a hardcoded
+  }
+}
+
+export async function fetchProductBySlug(slug: string): Promise<Product | null> {
+  try {
+    const res = await fetch(`${API}/api/products/${slug}`, { next: { revalidate: 60 } });
+    if (!res.ok) return getProductBySlug(slug) ?? null;
+    const data = await res.json();
+    const p = data.data ?? data;
+    if (!p || !p.slug) return getProductBySlug(slug) ?? null;
+    return dbToProduct(p);
+  } catch {
+    return getProductBySlug(slug) ?? null;
+  }
 }
