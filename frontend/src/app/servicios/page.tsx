@@ -184,29 +184,21 @@ const adicionales = [
 
 function BeforeAfterSlider() {
   const [pos, setPos] = useState(50);
-  const [pairs, setPairs] = useState<Array<{ before: string; after: string; title: string }>>([]);
-  const [currentPair, setCurrentPair] = useState(0);
+  const [beforeImg, setBeforeImg] = useState("/images/services/antes-2.jpg");
+  const [afterImg, setAfterImg] = useState("/images/services/resultado-3.jpg");
 
-  // Cargar pares antes/después desde servicios
   useEffect(() => {
-    fetch("/api/services")
+    fetch("/api/site-config")
       .then(r => r.json())
-      .then(data => {
-        const list = data.data ?? (Array.isArray(data) ? data : []);
-        const withPhotos = list
-          .filter((s: { before_image: string | null; image: string | null; is_active: boolean }) => s.before_image && s.image && s.is_active !== false)
-          .map((s: { before_image: string; image: string; title: string }) => ({ before: s.before_image, after: s.image, title: s.title }));
-        if (withPhotos.length > 0) setPairs(withPhotos);
+      .then((cfg: Record<string, string>) => {
+        if (cfg.slider_before) setBeforeImg(cfg.slider_before);
+        if (cfg.slider_after) setAfterImg(cfg.slider_after);
       })
       .catch(() => {});
   }, []);
 
-  // Fallback si no hay pares desde API
-  const beforeImg = pairs.length > 0 ? pairs[currentPair].before : "/images/services/antes-2.jpg";
-  const afterImg = pairs.length > 0 ? pairs[currentPair].after : "/images/services/resultado-3.jpg";
-
   return (
-    <div className="space-y-4">
+    <div>
       <div
         className="relative w-full max-w-3xl mx-auto rounded-3xl overflow-hidden shadow-2xl cursor-ew-resize select-none"
         style={{ aspectRatio: "4/3" }}
@@ -244,19 +236,6 @@ function BeforeAfterSlider() {
         </div>
       </div>
 
-      {/* Selector de servicio si hay múltiples pares */}
-      {pairs.length > 1 && (
-        <div className="flex justify-center gap-2 flex-wrap">
-          {pairs.map((p, i) => (
-            <button key={i} onClick={() => { setCurrentPair(i); setPos(50); }}
-              className={`text-xs px-3 py-1.5 rounded-full font-medium transition-all ${
-                currentPair === i ? "bg-vino text-white" : "bg-blush/40 text-humo hover:bg-blush"
-              }`}>
-              {p.title.split(" ").slice(0, 3).join(" ")}
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

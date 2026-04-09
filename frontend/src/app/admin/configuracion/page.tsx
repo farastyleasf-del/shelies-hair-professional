@@ -1,7 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import Image from "next/image";
 import { useAdminTheme, type ThemeMode } from "@/lib/admin-theme";
 import { channelIcons } from "@/lib/admin-data";
+import { apiUrl, authedFetch } from "@/lib/api";
 
 function SectionCard({ title, icon, children }: { title: string; icon: string; children: React.ReactNode }) {
   const t = useAdminTheme();
@@ -17,7 +19,53 @@ function SectionCard({ title, icon, children }: { title: string; icon: string; c
 
 export default function ConfiguracionPage() {
   const t = useAdminTheme();
-  const [tab, setTab] = useState<"integraciones" | "apariencia">("integraciones");
+  const [tab, setTab] = useState<"web" | "integraciones" | "apariencia">("web");
+
+  // Site config — fotos slider
+  const [sliderBefore, setSliderBefore] = useState("/images/services/antes-2.jpg");
+  const [sliderAfter, setSliderAfter] = useState("/images/services/resultado-3.jpg");
+  const [configLoaded, setConfigLoaded] = useState(false);
+  const [configSaving, setConfigSaving] = useState(false);
+  const [configToast, setConfigToast] = useState("");
+  const [uploadingSliderBefore, setUploadingSliderBefore] = useState(false);
+  const [uploadingSliderAfter, setUploadingSliderAfter] = useState(false);
+  const sliderBeforeRef = useRef<HTMLInputElement>(null);
+  const sliderAfterRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    fetch(apiUrl("/api/site-config"))
+      .then(r => r.json())
+      .then((cfg: Record<string, string>) => {
+        if (cfg.slider_before) setSliderBefore(cfg.slider_before);
+        if (cfg.slider_after) setSliderAfter(cfg.slider_after);
+      })
+      .catch(() => {})
+      .finally(() => setConfigLoaded(true));
+  }, []);
+
+  async function uploadSliderImage(file: File, target: "before" | "after") {
+    const setter = target === "before" ? setSliderBefore : setSliderAfter;
+    const setUploading = target === "before" ? setUploadingSliderBefore : setUploadingSliderAfter;
+    setUploading(true);
+    try {
+      const fd = new FormData(); fd.append("file", file);
+      const res = await authedFetch(apiUrl("/api/uploads"), { method: "POST", body: fd });
+      const data = await res.json();
+      setter(data.url as string);
+    } catch {} finally { setUploading(false); }
+  }
+
+  async function saveSliderConfig() {
+    setConfigSaving(true);
+    try {
+      await authedFetch(apiUrl("/api/site-config"), {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slider_before: sliderBefore, slider_after: sliderAfter }),
+      });
+      setConfigToast("Fotos del slider guardadas");
+      setTimeout(() => setConfigToast(""), 3000);
+    } catch {} finally { setConfigSaving(false); }
+  }
 
   const activeTabCls = `text-white shadow-lg`;
   const inactiveTabCls = t.mode === "dark"
@@ -53,8 +101,9 @@ export default function ConfiguracionPage() {
       {/* Tabs */}
       <div className={`flex gap-2 border-b pb-3`} style={{ borderColor: t.colors.border }}>
         {([
-          { id: "integraciones" as const, label: "🔌 Integraciones" },
-          { id: "apariencia" as const, label: "🎨 Apariencia" },
+          { id: "web" as const, label: "Página web" },
+          { id: "integraciones" as const, label: "Integraciones" },
+          { id: "apariencia" as const, label: "Apariencia" },
         ]).map((tb) => (
           <button key={tb.id} onClick={() => setTab(tb.id)}
             className={`px-4 py-2 rounded-xl text-sm transition-all ${tab === tb.id ? activeTabCls : inactiveTabCls}`}
@@ -63,6 +112,82 @@ export default function ConfiguracionPage() {
           </button>
         ))}
       </div>
+
+      {/* Toast */}
+      {configToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 rounded-xl text-white text-sm font-semibold shadow-lg" style={{ backgroundColor: t.colors.primary }}>
+          {configToast}
+        </div>
+      )}
+
+      {/* ═══ PÁGINA WEB ═══ */}
+      {tab === "web" && (
+        <div className="space-y-4">
+          <SectionCard title="Slider Antes / Después" icon="">
+            <p className="text-sm mb-4" style={{ color: t.colors.textMuted }}>
+              Cambia las fotos del slider &quot;La Transformación Shelie&apos;s&quot; en la página de servicios.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+              {/* Foto ANTES */}
+              <div>
+                <p className="text-xs font-semibold mb-2" style={{ color: t.colors.textMuted }}>Foto ANTES</p>
+                <input ref={sliderBeforeRef} type="file" accept="image/*" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) uploadSliderImage(f, "before"); }} />
+                {sliderBefore ? (
+                  <div className="relative w-full h-40 rounded-xl overflow-hidden" style={{ backgroundColor: t.colors.bgDeep }}>
+                    <Image src={sliderBefore} alt="Antes" fill className="object-cover" sizes="300px" unoptimized />
+                    <div className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-lg bg-orange-500 text-white">ANTES</div>
+                    <div className="absolute bottom-2 right-2 flex gap-1">
+                      <button onClick={() => sliderBeforeRef.current?.click()} disabled={uploadingSliderBefore}
+                        className="text-[10px] px-2 py-1 rounded-lg bg-black/60 text-white font-medium hover:bg-black/80">
+                        {uploadingSliderBefore ? "Subiendo..." : "Cambiar"}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={() => sliderBeforeRef.current?.click()} disabled={uploadingSliderBefore}
+                    className="w-full h-32 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-2"
+                    style={{ borderColor: t.colors.border, color: t.colors.textMuted }}>
+                    <span className="text-xs font-medium">{uploadingSliderBefore ? "Subiendo..." : "Subir foto ANTES"}</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Foto DESPUÉS */}
+              <div>
+                <p className="text-xs font-semibold mb-2" style={{ color: t.colors.textMuted }}>Foto DESPUÉS</p>
+                <input ref={sliderAfterRef} type="file" accept="image/*" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) uploadSliderImage(f, "after"); }} />
+                {sliderAfter ? (
+                  <div className="relative w-full h-40 rounded-xl overflow-hidden" style={{ backgroundColor: t.colors.bgDeep }}>
+                    <Image src={sliderAfter} alt="Después" fill className="object-cover" sizes="300px" unoptimized />
+                    <div className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-lg bg-green-500 text-white">DESPUÉS</div>
+                    <div className="absolute bottom-2 right-2 flex gap-1">
+                      <button onClick={() => sliderAfterRef.current?.click()} disabled={uploadingSliderAfter}
+                        className="text-[10px] px-2 py-1 rounded-lg bg-black/60 text-white font-medium hover:bg-black/80">
+                        {uploadingSliderAfter ? "Subiendo..." : "Cambiar"}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={() => sliderAfterRef.current?.click()} disabled={uploadingSliderAfter}
+                    className="w-full h-32 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-2"
+                    style={{ borderColor: t.colors.border, color: t.colors.textMuted }}>
+                    <span className="text-xs font-medium">{uploadingSliderAfter ? "Subiendo..." : "Subir foto DESPUÉS"}</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <button onClick={saveSliderConfig} disabled={configSaving}
+              className="px-6 py-2.5 rounded-xl text-white text-sm font-semibold disabled:opacity-50"
+              style={{ backgroundColor: t.colors.primary }}>
+              {configSaving ? "Guardando..." : "Guardar fotos del slider"}
+            </button>
+          </SectionCard>
+        </div>
+      )}
 
       {/* ═══ INTEGRACIONES ═══ */}
       {tab === "integraciones" && (

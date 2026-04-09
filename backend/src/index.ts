@@ -16,6 +16,7 @@ import uploadsRouter     from "./routes/uploads";
 import employeesRouter   from "./routes/employees";
 import stylistRouter     from "./routes/stylist";
 import promosRouter      from "./routes/promos";
+import siteConfigRouter  from "./routes/siteConfig";
 import { ensureSchema } from "./lib/db";
 import { requireAuth } from "./middleware/auth";
 import { initProductsTable } from "./lib/db-products";
@@ -23,6 +24,7 @@ import { initServicesTable } from "./lib/db-services";
 import { initEmployeesTables } from "./lib/employees-db";
 import { initStylistTables } from "./lib/stylist-db";
 import { initPromosTable } from "./lib/promos-db";
+import { initSiteConfigTable } from "./routes/siteConfig";
 
 dotenv.config();
 
@@ -67,6 +69,7 @@ app.use("/api/contact",             contactRouter);
 app.use("/api/uploads",             uploadsRouter);
 app.use("/api/appointments",        appointmentsRouter);
 app.use("/api/promos",              promosRouter);
+app.use("/api/site-config",         siteConfigRouter);
 
 // Admin: /auth es pública, el resto requiere JWT
 app.use("/api/admin", (req, res, next) => {
@@ -104,6 +107,7 @@ async function start() {
     await initEmployeesTables();
     await initStylistTables();
     await initPromosTable();
+    await initSiteConfigTable();
   } catch (err) {
     console.warn("[init tables]", err);
   }
