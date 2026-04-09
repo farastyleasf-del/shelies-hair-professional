@@ -50,6 +50,7 @@ const NAV_SECTIONS = [
     links: [
       { href: "/admin/equipo",     label: "Equipo" },
       { href: "/admin/reportes",   label: "Reportes" },
+      { href: "/admin/configuracion", label: "Config" },
     ],
   },
 ];
