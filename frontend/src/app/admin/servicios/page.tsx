@@ -494,105 +494,86 @@ export default function AdminServicios() {
                 />
               </div>
 
-              {/* Image principal */}
-              <div>
-                <label className={labelCls} style={labelStyle}>Imagen principal</label>
-                <div className="flex gap-2">
-                  <input
-                    value={form.image ?? ""}
-                    onChange={(e) => upd("image", e.target.value || null)}
-                    className={input}
-                    style={inputStyle}
-                    placeholder="https://… o /uploads/…"
-                  />
-                </div>
-                <div className="mt-2 flex items-center gap-3">
-                  <input
-                    ref={imageFileRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleImageChange}
-                  />
-                  <button
-                    type="button"
-                    disabled={uploadingImage}
-                    onClick={() => imageFileRef.current?.click()}
-                    className="text-xs px-3 py-1.5 rounded-lg border font-medium hover:opacity-80 transition-opacity disabled:opacity-50"
-                    style={{ borderColor: t.colors.border, color: t.colors.text }}
-                  >
-                    {uploadingImage ? "Subiendo…" : "Subir imagen"}
-                  </button>
-                  {uploadingImage && (
-                    <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none" style={{ color: t.colors.textMuted }}>
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                    </svg>
+              {/* ── Fotos del servicio ── */}
+              <div className="border rounded-xl p-4 space-y-4" style={{ borderColor: t.colors.border }}>
+                <p className="text-sm font-semibold" style={{ color: t.colors.text }}>Fotos del servicio</p>
+
+                {/* Después (resultado) */}
+                <div>
+                  <label className={labelCls} style={labelStyle}>Foto resultado (Después)</label>
+                  <input ref={imageFileRef} type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+                  {form.image ? (
+                    <div className="relative w-full h-40 rounded-xl overflow-hidden" style={{ backgroundColor: t.colors.bgDeep }}>
+                      <Image src={form.image} alt="Resultado" fill className="object-cover" sizes="400px" unoptimized />
+                      <div className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-lg bg-green-500 text-white">DESPUÉS</div>
+                      <div className="absolute bottom-2 right-2 flex gap-1">
+                        <button type="button" onClick={() => imageFileRef.current?.click()} disabled={uploadingImage}
+                          className="text-[10px] px-2 py-1 rounded-lg bg-black/60 text-white font-medium hover:bg-black/80">
+                          {uploadingImage ? "Subiendo..." : "Cambiar"}
+                        </button>
+                        <button type="button" onClick={() => upd("image", null)}
+                          className="text-[10px] px-2 py-1 rounded-lg bg-red-500/80 text-white font-medium hover:bg-red-600">
+                          Quitar
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => imageFileRef.current?.click()} disabled={uploadingImage}
+                      className="w-full h-32 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-2 hover:opacity-80 transition-opacity"
+                      style={{ borderColor: t.colors.border, color: t.colors.textMuted }}>
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                      <span className="text-xs font-medium">{uploadingImage ? "Subiendo..." : "Subir foto resultado"}</span>
+                    </button>
                   )}
                 </div>
-                {form.image && (
-                  <div className="relative w-40 h-24 rounded-xl overflow-hidden mt-2" style={{ backgroundColor: t.colors.bgDeep }}>
-                    <Image src={form.image} alt="preview" fill className="object-cover" sizes="160px" unoptimized />
-                    <button
-                      type="button"
-                      onClick={() => upd("image", null)}
-                      className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-500 text-white text-xs leading-none flex items-center justify-center"
-                    >
-                      ×
+
+                {/* Antes */}
+                <div>
+                  <label className={labelCls} style={labelStyle}>Foto antes del tratamiento</label>
+                  <input ref={beforeFileRef} type="file" accept="image/*" className="hidden" onChange={handleBeforeChange} />
+                  {form.before_image ? (
+                    <div className="relative w-full h-40 rounded-xl overflow-hidden" style={{ backgroundColor: t.colors.bgDeep }}>
+                      <Image src={form.before_image} alt="Antes" fill className="object-cover" sizes="400px" unoptimized />
+                      <div className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-lg bg-orange-500 text-white">ANTES</div>
+                      <div className="absolute bottom-2 right-2 flex gap-1">
+                        <button type="button" onClick={() => beforeFileRef.current?.click()} disabled={uploadingBefore}
+                          className="text-[10px] px-2 py-1 rounded-lg bg-black/60 text-white font-medium hover:bg-black/80">
+                          {uploadingBefore ? "Subiendo..." : "Cambiar"}
+                        </button>
+                        <button type="button" onClick={() => upd("before_image", null)}
+                          className="text-[10px] px-2 py-1 rounded-lg bg-red-500/80 text-white font-medium hover:bg-red-600">
+                          Quitar
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => beforeFileRef.current?.click()} disabled={uploadingBefore}
+                      className="w-full h-32 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-2 hover:opacity-80 transition-opacity"
+                      style={{ borderColor: t.colors.border, color: t.colors.textMuted }}>
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                      <span className="text-xs font-medium">{uploadingBefore ? "Subiendo..." : "Subir foto antes"}</span>
                     </button>
+                  )}
+                </div>
+
+                {/* Preview lado a lado */}
+                {form.before_image && form.image && (
+                  <div>
+                    <p className="text-[10px] font-medium mb-1" style={{ color: t.colors.textFaint }}>Vista previa antes / después</p>
+                    <div className="flex gap-2">
+                      <div className="flex-1 relative h-28 rounded-lg overflow-hidden" style={{ backgroundColor: t.colors.bgDeep }}>
+                        <Image src={form.before_image} alt="Antes" fill className="object-cover" sizes="200px" unoptimized />
+                        <span className="absolute bottom-1 left-1 text-[8px] font-bold px-1.5 py-0.5 rounded bg-orange-500 text-white">ANTES</span>
+                      </div>
+                      <div className="flex-1 relative h-28 rounded-lg overflow-hidden" style={{ backgroundColor: t.colors.bgDeep }}>
+                        <Image src={form.image} alt="Después" fill className="object-cover" sizes="200px" unoptimized />
+                        <span className="absolute bottom-1 left-1 text-[8px] font-bold px-1.5 py-0.5 rounded bg-green-500 text-white">DESPUÉS</span>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
 
-              {/* Before image */}
-              <div>
-                <label className={labelCls} style={labelStyle}>Imagen &quot;Antes&quot; (opcional)</label>
-                <div className="flex gap-2">
-                  <input
-                    value={form.before_image ?? ""}
-                    onChange={(e) => upd("before_image", e.target.value || null)}
-                    className={input}
-                    style={inputStyle}
-                    placeholder="https://… o /uploads/…"
-                  />
-                </div>
-                <div className="mt-2 flex items-center gap-3">
-                  <input
-                    ref={beforeFileRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleBeforeChange}
-                  />
-                  <button
-                    type="button"
-                    disabled={uploadingBefore}
-                    onClick={() => beforeFileRef.current?.click()}
-                    className="text-xs px-3 py-1.5 rounded-lg border font-medium hover:opacity-80 transition-opacity disabled:opacity-50"
-                    style={{ borderColor: t.colors.border, color: t.colors.text }}
-                  >
-                    {uploadingBefore ? "Subiendo…" : "Subir imagen"}
-                  </button>
-                  {uploadingBefore && (
-                    <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none" style={{ color: t.colors.textMuted }}>
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                    </svg>
-                  )}
-                </div>
-                {form.before_image && (
-                  <div className="relative w-40 h-24 rounded-xl overflow-hidden mt-2" style={{ backgroundColor: t.colors.bgDeep }}>
-                    <Image src={form.before_image} alt="antes preview" fill className="object-cover" sizes="160px" unoptimized />
-                    <button
-                      type="button"
-                      onClick={() => upd("before_image", null)}
-                      className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-500 text-white text-xs leading-none flex items-center justify-center"
-                    >
-                      ×
-                    </button>
-                  </div>
-                )}
-              </div>
 
               {/* is_active */}
               <div>

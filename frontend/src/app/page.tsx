@@ -139,7 +139,7 @@ export default function HomePage() {
             <div className="flex gap-0 mt-10 pt-8 border-t border-blush/60 divide-x divide-blush/50">
               {[
                 { num: "+1.200", label: "clientas satisfechas" },
-                { num: "4 años", label: "de experiencia" },
+                { num: "+7 años", label: "de experiencia" },
                 { num: "30+",    label: "productos pro" },
               ].map((s) => (
                 <div key={s.label} className="flex-1 text-center first:text-left last:text-right px-4 first:pl-0 last:pr-0">
