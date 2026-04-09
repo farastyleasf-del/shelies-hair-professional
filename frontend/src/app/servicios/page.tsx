@@ -184,43 +184,79 @@ const adicionales = [
 
 function BeforeAfterSlider() {
   const [pos, setPos] = useState(50);
+  const [pairs, setPairs] = useState<Array<{ before: string; after: string; title: string }>>([]);
+  const [currentPair, setCurrentPair] = useState(0);
+
+  // Cargar pares antes/después desde servicios
+  useEffect(() => {
+    fetch("/api/services")
+      .then(r => r.json())
+      .then(data => {
+        const list = data.data ?? (Array.isArray(data) ? data : []);
+        const withPhotos = list
+          .filter((s: { before_image: string | null; image: string | null; is_active: boolean }) => s.before_image && s.image && s.is_active !== false)
+          .map((s: { before_image: string; image: string; title: string }) => ({ before: s.before_image, after: s.image, title: s.title }));
+        if (withPhotos.length > 0) setPairs(withPhotos);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Fallback si no hay pares desde API
+  const beforeImg = pairs.length > 0 ? pairs[currentPair].before : "/images/services/antes-2.jpg";
+  const afterImg = pairs.length > 0 ? pairs[currentPair].after : "/images/services/resultado-3.jpg";
 
   return (
-    <div
-      className="relative w-full max-w-3xl mx-auto rounded-3xl overflow-hidden shadow-2xl cursor-ew-resize select-none"
-      style={{ aspectRatio: "4/3" }}
-      onMouseMove={(e) => {
-        const r = e.currentTarget.getBoundingClientRect();
-        setPos(Math.min(94, Math.max(6, ((e.clientX - r.left) / r.width) * 100)));
-      }}
-      onTouchMove={(e) => {
-        const r = e.currentTarget.getBoundingClientRect();
-        setPos(Math.min(94, Math.max(6, ((e.touches[0].clientX - r.left) / r.width) * 100)));
-      }}
-    >
-      {/* AFTER — cabello lacio */}
-      <Image src="/images/services/resultado-3.jpg" alt="Después" fill className="object-cover object-top" sizes="100vw" priority />
+    <div className="space-y-4">
+      <div
+        className="relative w-full max-w-3xl mx-auto rounded-3xl overflow-hidden shadow-2xl cursor-ew-resize select-none"
+        style={{ aspectRatio: "4/3" }}
+        onMouseMove={(e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          setPos(Math.min(94, Math.max(6, ((e.clientX - r.left) / r.width) * 100)));
+        }}
+        onTouchMove={(e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          setPos(Math.min(94, Math.max(6, ((e.touches[0].clientX - r.left) / r.width) * 100)));
+        }}
+      >
+        {/* AFTER */}
+        <Image src={afterImg} alt="Después" fill className="object-cover object-top" sizes="100vw" priority unoptimized />
 
-      {/* BEFORE — cabello frizzy, recortado a la izquierda */}
-      <div className="absolute inset-0 overflow-hidden" style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }}>
-        <Image src="/images/services/antes-2.jpg" alt="Antes" fill className="object-cover object-top" sizes="100vw" priority />
-      </div>
+        {/* BEFORE */}
+        <div className="absolute inset-0 overflow-hidden" style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }}>
+          <Image src={beforeImg} alt="Antes" fill className="object-cover object-top" sizes="100vw" priority unoptimized />
+        </div>
 
-      {/* Divider */}
-      <div className="absolute top-0 bottom-0 w-0.5 bg-white/90 shadow-[0_0_12px_rgba(255,255,255,0.8)] pointer-events-none"
-        style={{ left: `${pos}%` }}>
-        <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-11 h-11 rounded-full bg-white shadow-xl border-2 border-white/80 flex items-center justify-center">
-          <span className="text-vino font-black text-sm leading-none">◀▶</span>
+        {/* Divider */}
+        <div className="absolute top-0 bottom-0 w-0.5 bg-white/90 shadow-[0_0_12px_rgba(255,255,255,0.8)] pointer-events-none"
+          style={{ left: `${pos}%` }}>
+          <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-11 h-11 rounded-full bg-white shadow-xl border-2 border-white/80 flex items-center justify-center">
+            <span className="text-vino font-black text-sm leading-none">◀▶</span>
+          </div>
+        </div>
+
+        {/* Labels */}
+        <div className="absolute bottom-5 left-5 bg-carbon/70 backdrop-blur-sm text-white text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wider pointer-events-none">
+          Antes
+        </div>
+        <div className="absolute bottom-5 right-5 bg-fucsia/80 backdrop-blur-sm text-white text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wider pointer-events-none">
+          Después
         </div>
       </div>
 
-      {/* Labels */}
-      <div className="absolute bottom-5 left-5 bg-carbon/70 backdrop-blur-sm text-white text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wider pointer-events-none">
-        Antes
-      </div>
-      <div className="absolute bottom-5 right-5 bg-fucsia/80 backdrop-blur-sm text-white text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wider pointer-events-none">
-        Después
-      </div>
+      {/* Selector de servicio si hay múltiples pares */}
+      {pairs.length > 1 && (
+        <div className="flex justify-center gap-2 flex-wrap">
+          {pairs.map((p, i) => (
+            <button key={i} onClick={() => { setCurrentPair(i); setPos(50); }}
+              className={`text-xs px-3 py-1.5 rounded-full font-medium transition-all ${
+                currentPair === i ? "bg-vino text-white" : "bg-blush/40 text-humo hover:bg-blush"
+              }`}>
+              {p.title.split(" ").slice(0, 3).join(" ")}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
