@@ -10,16 +10,7 @@ const nextConfig = {
     ],
   },
   async rewrites() {
-    return [
-      {
-        source: "/api/:path*",
-        destination: "https://shelies.asf.company/api/:path*",
-      },
-      {
-        source: "/uploads/:path*",
-        destination: "https://shelies.asf.company/uploads/:path*",
-      },
-    ];
+    return [];
   },
 };
 
