@@ -3,8 +3,7 @@ import { Suspense, useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import ProductCard from "@/components/ProductCard";
 import { products as fallbackProducts } from "@/lib/data";
-import { apiUrl } from "@/lib/api";
-import { Objective, HairType, Product } from "@/lib/types";
+import { Objective, HairType, Product, Badge, Category } from "@/lib/types";
 
 const objectives: { value: Objective | ""; label: string }[] = [
   { value: "", label: "Todos los objetivos" },
@@ -29,6 +28,29 @@ const priceRanges = [
   { value: "60000-999999", label: "Más de $60.000" },
 ];
 
+function mapDBProduct(p: Record<string, unknown>): Product {
+  return {
+    id: (p.slug as string) || String(p.id),
+    slug: (p.slug as string) || String(p.id),
+    name: (p.name as string) ?? "",
+    tagline: (p.tagline as string) ?? "",
+    price: Number(p.price),
+    comparePrice: p.compare_price ? Number(p.compare_price) : undefined,
+    images: (p.images as string[]) ?? [],
+    badges: ((p.badges as string[]) ?? []) as Badge[],
+    benefits: (p.benefits as string[]) ?? [],
+    forWhom: (p.for_whom as string) ?? "",
+    howToUse: p.how_to_use ? (typeof p.how_to_use === "string" ? [p.how_to_use as string] : p.how_to_use as string[]) : [],
+    ingredients: (p.ingredients as string) ?? "",
+    faq: [],
+    category: ((p.category as string) ?? "kit") as Category,
+    objective: ((p.objective as string[]) ?? []) as Objective[],
+    hairType: ((p.hair_type as string[]) ?? ["todos"]) as HairType[],
+    stock: (p.stock as number) ?? 0,
+    crossSell: [],
+  };
+}
+
 export default function TiendaPage() {
   return (
     <Suspense fallback={<div className="max-w-7xl mx-auto px-4 py-10"><p className="text-humo">Cargando tienda...</p></div>}>
@@ -41,33 +63,29 @@ function TiendaContent() {
   const searchParams = useSearchParams();
   const initialObj = (searchParams.get("objective") as Objective) || "";
 
-  const [products, setProducts] = useState<Product[]>(fallbackProducts);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [objective, setObjective] = useState<Objective | "">(initialObj);
   const [hairType, setHairType] = useState<HairType | "">("");
   const [priceRange, setPriceRange] = useState("");
 
-  // Cargar productos desde API
   useEffect(() => {
-    fetch(apiUrl("/api/products"))
+    let cancelled = false;
+    fetch("/api/products")
       .then(r => r.json())
       .then(data => {
+        if (cancelled) return;
         const list = data.data ?? (Array.isArray(data) ? data : []);
-        if (list.length > 0) {
-          setProducts(list.filter((p: { is_active: boolean }) => p.is_active !== false).map((p: { slug: string; id: number; name: string; tagline: string; price: string; compare_price: string | null; category: string; stock: number; images: string[]; badges: string[]; benefits: string[]; for_whom: string; how_to_use: string; ingredients: string; hair_type: string[]; objective: string[] }) => ({
-            id: p.slug || String(p.id), slug: p.slug || String(p.id), name: p.name,
-            tagline: p.tagline ?? "", price: Number(p.price),
-            comparePrice: p.compare_price ? Number(p.compare_price) : undefined,
-            images: p.images ?? [], badges: (p.badges ?? []) as Product["badges"],
-            benefits: p.benefits ?? [], forWhom: p.for_whom ?? "",
-            howToUse: p.how_to_use ? [p.how_to_use] : [], ingredients: p.ingredients ?? "",
-            faq: [], category: (p.category ?? "kit") as Product["category"],
-            objective: (p.objective ?? []) as Product["objective"],
-            hairType: (p.hair_type ?? ["todos"]) as Product["hairType"],
-            stock: p.stock ?? 0, crossSell: [],
-          })));
+        const active = list.filter((p: Record<string, unknown>) => p.is_active !== false);
+        if (active.length > 0) {
+          setProducts(active.map(mapDBProduct));
+        } else {
+          setProducts(fallbackProducts);
         }
       })
-      .catch(() => {});
+      .catch(() => { if (!cancelled) setProducts(fallbackProducts); })
+      .finally(() => { if (!cancelled) setLoaded(true); });
+    return () => { cancelled = true; };
   }, []);
 
   const filtered = useMemo(() => {
@@ -79,7 +97,7 @@ function TiendaContent() {
       list = list.filter((p) => p.price >= min && p.price <= max);
     }
     return list;
-  }, [objective, hairType, priceRange]);
+  }, [products, objective, hairType, priceRange]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-10">
@@ -118,10 +136,20 @@ function TiendaContent() {
       </div>
 
       {/* Grid */}
-      {filtered.length === 0 ? (
-        <p className="text-humo text-center py-20">No hay productos con esos filtros. Intenta otra combinación.</p>
+      {!loaded ? (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          {[1,2,3,4].map(i => (
+            <div key={i} className="h-72 rounded-2xl bg-blush/20 animate-pulse" />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-20">
+          <p className="text-4xl mb-3">🔍</p>
+          <p className="font-poppins font-semibold text-lg">No encontramos productos con esos filtros</p>
+          <p className="text-humo text-sm mt-1">Intenta con otros criterios</p>
+        </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {filtered.map((p) => (
             <ProductCard key={p.id} product={p} />
           ))}
